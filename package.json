@@ -10,8 +10,9 @@
   },
   "scripts": {
     "dev": "pnpm --filter @mimix/web dev",
+    "dev:target": "pnpm --filter @mimix/demo-target dev",
     "build": "pnpm --filter @mimix/web build",
-    "test": "pnpm --filter @mimix/policy-engine test",
+    "test": "pnpm --filter @mimix/policy-engine test && pnpm --filter @mimix/personas test",
     "deploy:usdg": "tsx scripts/deploy-mock-usdg.ts",
     "setup:treasury": "tsx scripts/setup-treasury.ts"
   },
