@@ -1,0 +1,4 @@
+- generic [ref=e4]:
+  - heading "DemoPay" [level=1] [ref=e5]
+  - paragraph [ref=e6]: Send SOL to support this project.
+  - button "Connect Phantom" [ref=e7] [cursor=pointer]

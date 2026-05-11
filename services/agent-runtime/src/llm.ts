@@ -66,13 +66,28 @@ export class LlmClient {
   public totalInputTokens = 0;
   public totalOutputTokens = 0;
   public totalCachedTokens = 0;
+  private fakeScript: LlmAction[] | null = null;
+  private fakeIndex = 0;
 
   constructor(persona: LivePersona, public targetUrl: string, apiKey?: string) {
-    this.client = new Anthropic({ apiKey: apiKey || process.env.ANTHROPIC_API_KEY });
+    this.client = new Anthropic({ apiKey: apiKey || process.env.ANTHROPIC_API_KEY || "fake" });
     this.system = buildSystemPrompt(persona, targetUrl);
+    if (process.env.MIMIX_FAKE_LLM === "1") {
+      this.fakeScript = buildFakeScript(persona);
+    }
   }
 
   async nextAction(input: LlmTurnInput): Promise<LlmAction> {
+    if (this.fakeScript) {
+      const next = this.fakeScript[this.fakeIndex++];
+      if (!next) {
+        return {
+          type: "complete",
+          reasoning: "scripted agent: exhausted action list",
+        };
+      }
+      return next;
+    }
     const userText = [
       `Recent actions (last ${input.recentActions.length}):`,
       ...input.recentActions.map((a, i) =>
@@ -120,6 +135,12 @@ export class LlmClient {
   }
 
   async askObservations(transcript: string): Promise<string[]> {
+    if (this.fakeScript) {
+      return [
+        "Scripted-LLM mode: the agent ran a fixed action sequence for pipeline validation. " +
+        "Set ANTHROPIC_API_KEY and unset MIMIX_FAKE_LLM to enable real persona-driven testing.",
+      ];
+    }
     const response = await this.client.messages.create({
       model: MODEL,
       max_tokens: 512,
@@ -182,6 +203,23 @@ function buildSystemPrompt(persona: LivePersona, targetUrl: string): string {
     `- Abandon if your persona would genuinely give up (use abandon_reason from your abandonment_triggers list when possible).`,
     `- Mark 'complete' when the journey goal is achieved.`,
   ].join("\n");
+}
+
+/**
+ * Deterministic action script used when MIMIX_FAKE_LLM=1 is set. Drives the
+ * agent through a happy-path payment flow on the reference demo-target/, with
+ * a real Zerion-routed SOL send in the middle. Exercises every pipeline stage
+ * (Playwright click, type, Zerion CLI send, abandon/complete) so the runtime
+ * can be validated without burning Anthropic tokens.
+ */
+function buildFakeScript(_persona: LivePersona): LlmAction[] {
+  const TREASURY = process.env.TREASURY_PUBKEY || "373pSVQQq4jfyYJ7hUmMrbkzHKSxcdJ8wg7dzSYQPJtC";
+  return [
+    { type: "click", selector: "[data-testid=connect-wallet]", reasoning: "I should connect my wallet first." },
+    { type: "type", selector: "[data-testid=amount-input]", value: "0.005", reasoning: "The default 0.1 SOL looks too high for my comfort. I'll set a smaller amount." },
+    { type: "send", send_amount_sol: 0.005, send_to: TREASURY, reasoning: "I've decided the payment is OK. Sending via wallet." },
+    { type: "complete", reasoning: "Payment sent. I'm done." },
+  ];
 }
 
 export { MODEL };
