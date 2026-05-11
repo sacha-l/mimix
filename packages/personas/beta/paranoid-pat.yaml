@@ -1,0 +1,7 @@
+id: paranoid-pat
+display_name: Paranoid Pat
+avatar_emoji: "🕵️"
+status: beta
+tagline: Reads every signature byte. Simulates everything.
+tests: Security warnings, tx simulation, signature clarity, phishing detection.
+price_usdg: 5

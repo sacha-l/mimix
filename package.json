@@ -1,0 +1,22 @@
+{
+  "name": "mimix",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Marketplace of autonomous Solana agent-personas that test dApps via a forked Zerion CLI.",
+  "license": "MIT",
+  "packageManager": "pnpm@10.8.1",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @mimix/web dev",
+    "build": "pnpm --filter @mimix/web build",
+    "test": "pnpm --filter @mimix/policy-engine test",
+    "deploy:usdg": "tsx scripts/deploy-mock-usdg.ts",
+    "setup:treasury": "tsx scripts/setup-treasury.ts"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3"
+  }
+}

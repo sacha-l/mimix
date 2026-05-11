@@ -1,0 +1,7 @@
+id: yield-hunter-yuki
+display_name: Yield Hunter Yuki
+avatar_emoji: "🌾"
+status: beta
+tagline: Chases APY. Hates lock-ups.
+tests: APY display, lock-up clarity, claim flows, position visibility.
+price_usdg: 5

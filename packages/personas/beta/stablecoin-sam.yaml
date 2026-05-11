@@ -1,0 +1,7 @@
+id: stablecoin-sam
+display_name: Stablecoin Sam
+avatar_emoji: "💵"
+status: beta
+tagline: Tests recurring payments and stablecoin flows.
+tests: Recurring payment flows, USDC/USDG pair UX, fee transparency.
+price_usdg: 5

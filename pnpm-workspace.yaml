@@ -1,0 +1,7 @@
+packages:
+  - "apps/*"
+  - "packages/persona-types"
+  - "packages/policy-engine"
+  - "packages/personas"
+  - "services/*"
+  - "demo-target"

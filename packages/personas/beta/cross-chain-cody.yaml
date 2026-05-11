@@ -1,0 +1,7 @@
+id: cross-chain-cody
+display_name: Cross-chain Cody
+avatar_emoji: "🌉"
+status: beta
+tagline: Bridges in from another chain before testing.
+tests: LI.FI bridge UX, post-bridge asset visibility, cross-chain confusion.
+price_usdg: 5

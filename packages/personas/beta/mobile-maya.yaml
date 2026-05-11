@@ -1,0 +1,7 @@
+id: mobile-maya
+display_name: Mobile Maya
+avatar_emoji: "📱"
+status: beta
+tagline: Phantom mobile user on a small screen.
+tests: Responsive layout, mobile wallet adapter, touch targets.
+price_usdg: 5
