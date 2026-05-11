@@ -70,9 +70,15 @@ export class LlmClient {
   private fakeIndex = 0;
 
   constructor(persona: LivePersona, public targetUrl: string, apiKey?: string) {
-    this.client = new Anthropic({ apiKey: apiKey || process.env.ANTHROPIC_API_KEY || "fake" });
+    const key = apiKey || process.env.ANTHROPIC_API_KEY;
+    // Auto-enable scripted mode when no API key is configured, so the
+    // pipeline still produces a real Zerion-routed onchain tx the user
+    // can verify on Solscan. Set ANTHROPIC_API_KEY (and leave
+    // MIMIX_FAKE_LLM unset) for true persona-driven exploration.
+    const useFake = process.env.MIMIX_FAKE_LLM === "1" || !key;
+    this.client = new Anthropic({ apiKey: key || "fake" });
     this.system = buildSystemPrompt(persona, targetUrl);
-    if (process.env.MIMIX_FAKE_LLM === "1") {
+    if (useFake) {
       this.fakeScript = buildFakeScript(persona);
     }
   }

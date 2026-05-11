@@ -1,0 +1,11 @@
+{
+  "name": "@mimix/orchestrator",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./src/index.ts",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": {
+    "@mimix/persona-types": "workspace:*",
+    "@mimix/personas": "workspace:*"
+  }
+}

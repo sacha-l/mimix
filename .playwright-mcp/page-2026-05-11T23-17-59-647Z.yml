@@ -1,0 +1,81 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]:
+      - link "Mimix" [ref=e4] [cursor=pointer]:
+        - /url: /
+      - navigation [ref=e5]:
+        - link "Personas" [ref=e6] [cursor=pointer]:
+          - /url: /personas
+        - link "Start a run" [ref=e7] [cursor=pointer]:
+          - /url: /register
+  - main [ref=e8]:
+    - generic [ref=e9]:
+      - heading "Persona marketplace" [level=1] [ref=e10]
+      - paragraph [ref=e11]: $5 USDG per persona. 3 live, 5 beta.
+      - generic [ref=e12]:
+        - 'button "🐺 Degen Dan Multi-tx power user. Impatient. Ignores warnings. Tests: Multi-tx flow, repeat actions, error recovery, rapid signing." [ref=e13] [cursor=pointer]':
+          - generic [ref=e14]: 🐺
+          - generic [ref=e15]: Degen Dan
+          - generic [ref=e16]: Multi-tx power user. Impatient. Ignores warnings.
+          - generic [ref=e17]:
+            - strong [ref=e18]: "Tests:"
+            - text: Multi-tx flow, repeat actions, error recovery, rapid signing.
+        - 'button "🐣 Newbie Nora First-time Solana user. Easily confused. Tests: Onboarding friction, signing UX, default amounts, confirmation modals." [ref=e19] [cursor=pointer]':
+          - generic [ref=e20]: 🐣
+          - generic [ref=e21]: Newbie Nora
+          - generic [ref=e22]: First-time Solana user. Easily confused.
+          - generic [ref=e23]:
+            - strong [ref=e24]: "Tests:"
+            - text: Onboarding friction, signing UX, default amounts, confirmation modals.
+        - 'button "🐋 Whale Walter Large-amount user. Cautious about execution quality. Tests: Large-amount warnings, signature clarity, execution quality." [ref=e25] [cursor=pointer]':
+          - generic [ref=e26]: 🐋
+          - generic [ref=e27]: Whale Walter
+          - generic [ref=e28]: Large-amount user. Cautious about execution quality.
+          - generic [ref=e29]:
+            - strong [ref=e30]: "Tests:"
+            - text: Large-amount warnings, signature clarity, execution quality.
+        - 'button "Beta 🌉 Cross-chain Cody Bridges in from another chain before testing. Tests: LI.FI bridge UX, post-bridge asset visibility, cross-chain confusion." [ref=e31]':
+          - generic [ref=e32]: Beta
+          - generic [ref=e33]: 🌉
+          - generic [ref=e34]: Cross-chain Cody
+          - generic [ref=e35]: Bridges in from another chain before testing.
+          - generic [ref=e36]:
+            - strong [ref=e37]: "Tests:"
+            - text: LI.FI bridge UX, post-bridge asset visibility, cross-chain confusion.
+        - 'button "Beta 📱 Mobile Maya Phantom mobile user on a small screen. Tests: Responsive layout, mobile wallet adapter, touch targets." [ref=e38]':
+          - generic [ref=e39]: Beta
+          - generic [ref=e40]: 📱
+          - generic [ref=e41]: Mobile Maya
+          - generic [ref=e42]: Phantom mobile user on a small screen.
+          - generic [ref=e43]:
+            - strong [ref=e44]: "Tests:"
+            - text: Responsive layout, mobile wallet adapter, touch targets.
+        - 'button "Beta 🕵️ Paranoid Pat Reads every signature byte. Simulates everything. Tests: Security warnings, tx simulation, signature clarity, phishing detection." [ref=e45]':
+          - generic [ref=e46]: Beta
+          - generic [ref=e47]: 🕵️
+          - generic [ref=e48]: Paranoid Pat
+          - generic [ref=e49]: Reads every signature byte. Simulates everything.
+          - generic [ref=e50]:
+            - strong [ref=e51]: "Tests:"
+            - text: Security warnings, tx simulation, signature clarity, phishing detection.
+        - 'button "Beta 💵 Stablecoin Sam Tests recurring payments and stablecoin flows. Tests: Recurring payment flows, USDC/USDG pair UX, fee transparency." [ref=e52]':
+          - generic [ref=e53]: Beta
+          - generic [ref=e54]: 💵
+          - generic [ref=e55]: Stablecoin Sam
+          - generic [ref=e56]: Tests recurring payments and stablecoin flows.
+          - generic [ref=e57]:
+            - strong [ref=e58]: "Tests:"
+            - text: Recurring payment flows, USDC/USDG pair UX, fee transparency.
+        - 'button "Beta 🌾 Yield Hunter Yuki Chases APY. Hates lock-ups. Tests: APY display, lock-up clarity, claim flows, position visibility." [ref=e59]':
+          - generic [ref=e60]: Beta
+          - generic [ref=e61]: 🌾
+          - generic [ref=e62]: Yield Hunter Yuki
+          - generic [ref=e63]: Chases APY. Hates lock-ups.
+          - generic [ref=e64]:
+            - strong [ref=e65]: "Tests:"
+            - text: APY display, lock-up clarity, claim flows, position visibility.
+      - generic [ref=e66]:
+        - generic [ref=e67]: Select at least 1 live persona
+        - button "Continue → Pay" [disabled] [ref=e68]
+  - contentinfo [ref=e69]: Solana devnet · Real onchain transactions via forked Zerion CLI
+  - alert [ref=e70]

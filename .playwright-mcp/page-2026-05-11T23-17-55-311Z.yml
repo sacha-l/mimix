@@ -1,0 +1,34 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]:
+      - link "Mimix" [ref=e4] [cursor=pointer]:
+        - /url: /
+      - navigation [ref=e5]:
+        - link "Personas" [ref=e6] [cursor=pointer]:
+          - /url: /personas
+        - link "Start a run" [ref=e7] [cursor=pointer]:
+          - /url: /register
+  - main [ref=e8]:
+    - generic [ref=e9]:
+      - heading "Test your Solana dApp with real users on demand." [level=1] [ref=e10]
+      - paragraph [ref=e11]: Mimix spawns autonomous agent-personas that navigate your dApp through a headless browser, execute real signed onchain transactions via a forked Zerion CLI on Solana devnet, and return a structured UX report with verifiable Solscan links.
+      - generic [ref=e12]:
+        - link "Start a run" [ref=e13] [cursor=pointer]:
+          - /url: /register
+        - link "Browse personas" [ref=e14] [cursor=pointer]:
+          - /url: /personas
+      - generic [ref=e15]:
+        - generic [ref=e16]:
+          - generic [ref=e17]: 🎭
+          - heading "8 distinct personas" [level=3] [ref=e18]
+          - paragraph [ref=e19]: Each agent has its own scoped policy, behavior profile, and onchain wallet.
+        - generic [ref=e20]:
+          - generic [ref=e21]: ⛓️
+          - heading "Real onchain execution" [level=3] [ref=e22]
+          - paragraph [ref=e23]: Every transaction is signed and broadcast through the forked Zerion CLI, not simulated.
+        - generic [ref=e24]:
+          - generic [ref=e25]: 📊
+          - heading "UX report" [level=3] [ref=e26]
+          - paragraph [ref=e27]: Persona-voice observations, completed steps, abandonment reasons, Solscan links.
+  - contentinfo [ref=e28]: Solana devnet · Real onchain transactions via forked Zerion CLI
+  - alert [ref=e29]
