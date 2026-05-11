@@ -8,6 +8,9 @@ build/
 .env.local
 .env.*.local
 
+treasury-keypair.json
+treasury-keypair*.json
+
 runs/*
 !runs/.gitkeep
 
