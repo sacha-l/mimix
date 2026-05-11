@@ -1,0 +1,27 @@
+{
+  "name": "@mimix/agent-runtime",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./src/main.ts",
+  "exports": {
+    ".": "./src/main.ts",
+    "./zerion": "./src/zerion.ts"
+  },
+  "scripts": {
+    "test:zerion": "tsx src/zerion.test.ts",
+    "run:smoke": "tsx src/smoke.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.32.1",
+    "@mimix/persona-types": "workspace:*",
+    "@mimix/personas": "workspace:*",
+    "@mimix/policy-engine": "workspace:*",
+    "@solana/web3.js": "^1.95.4",
+    "dotenv": "^16.4.5",
+    "playwright": "^1.49.1"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3"
+  }
+}
