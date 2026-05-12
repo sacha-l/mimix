@@ -16,6 +16,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <a href="/" className="font-bold text-lg">Mimix</a>
             <nav className="text-sm text-slate-600 space-x-4">
               <a href="/personas" className="hover:text-slate-900">Personas</a>
+              <a href="/pricing" className="hover:text-slate-900">Pricing</a>
               <a href="/register" className="hover:text-slate-900">Start a run</a>
             </nav>
           </div>

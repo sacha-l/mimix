@@ -111,7 +111,7 @@ export default function RunPage() {
                     {ev.type === "budget_exceeded" && (
                       <>
                         cap reached @ {ev.turns_used} turns —{" "}
-                        <a href="#" className="underline">upgrade plan</a>
+                        <a href="/pricing" className="underline">upgrade plan</a>
                       </>
                     )}
                     {ev.type === "error" && ev.message}

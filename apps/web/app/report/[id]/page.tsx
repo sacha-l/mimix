@@ -163,7 +163,7 @@ export default function ReportPage() {
                     <strong className="text-orange-900">Persona hit its turn budget.</strong>
                     <span className="text-orange-700"> Observations below are based on the partial exploration.</span>
                   </div>
-                  <a href="#" className="text-xs underline text-orange-900 font-semibold whitespace-nowrap">
+                  <a href="/pricing" className="text-xs underline text-orange-900 font-semibold whitespace-nowrap">
                     Upgrade plan →
                   </a>
                 </div>
