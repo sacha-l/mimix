@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="./assets/logo-mark.png" alt="Mimix" width="160" />
+</p>
+
 # Mimix
 
 Hire AI personas to test your Solana dApp. They browse it, sign real transactions, and tell you what they hated.

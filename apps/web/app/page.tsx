@@ -1,6 +1,11 @@
 export default function LandingPage() {
   return (
-    <div className="py-16">
+    <div className="py-12">
+      <img
+        src="/logo-mark.png"
+        alt="Mimix"
+        className="h-36 w-auto mb-6"
+      />
       <h1 className="text-5xl font-bold tracking-tight mb-4">
         Test your Solana dApp with real users on demand.
       </h1>
