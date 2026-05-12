@@ -5,10 +5,8 @@ export default function LandingPage() {
         Test your Solana dApp with real users on demand.
       </h1>
       <p className="text-xl text-slate-600 mb-8 max-w-2xl">
-        Mimix spawns autonomous agent-personas that navigate your dApp through
-        a headless browser, execute real signed onchain transactions via a
-        forked Zerion CLI on Solana devnet, and return a structured UX report
-        with verifiable Solscan links.
+        AI personas hit your dApp with a real browser, a real wallet, and real
+        onchain transactions. Get persona-voice UX feedback in minutes.
       </p>
       <div className="flex gap-4">
         <a
