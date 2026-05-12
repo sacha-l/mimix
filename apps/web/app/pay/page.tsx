@@ -295,6 +295,20 @@ export default function PayPage() {
         <div className="text-2xl font-semibold">{amount} USDG</div>
       </div>
 
+      {typeof window !== "undefined" && window.location.hostname === "127.0.0.1" && (
+        <div className="bg-red-50 border border-red-300 rounded-xl p-4 mb-4 text-sm text-red-900">
+          <strong>Phantom won't connect from 127.0.0.1.</strong>{" "}
+          Open this URL instead:{" "}
+          <a
+            className="underline font-mono font-semibold"
+            href={`http://localhost:3000${typeof window !== "undefined" ? window.location.pathname : ""}`}
+          >
+            http://localhost:3000{typeof window !== "undefined" ? window.location.pathname : ""}
+          </a>
+          . You'll need to redo /register → /personas → /pay because localStorage doesn't carry across origins.
+        </div>
+      )}
+
       {phantomDetected === false && (
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4 text-sm text-amber-900">
           <strong>No Phantom detected.</strong> Install{" "}
