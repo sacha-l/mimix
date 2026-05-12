@@ -100,13 +100,19 @@ export default function PayPage() {
     router.push(`/run/${data.run_id}`);
   };
 
-  const handleConnect = async () => {
+  const handleConnect = async (opts: { reset?: boolean } = {}) => {
     setError(null);
     setBusy("connect");
     try {
       const p = getPhantom();
       if (!p) {
         throw new Error(`Phantom not detected. Wallet env: ${describeWalletEnv()}`);
+      }
+      // Clear any stale connection from a previous session — Phantom's
+      // "Unexpected error" on connect is often caused by a stuck pending
+      // request from an earlier failed connect.
+      if (opts.reset || (p as any).isConnected) {
+        try { await p.disconnect(); } catch {}
       }
       const res = await p.connect();
       setUserPubkey(res.publicKey.toString());
@@ -119,13 +125,17 @@ export default function PayPage() {
         const origin = typeof window !== "undefined" ? window.location.origin : "";
         const usingIp = origin.includes("127.0.0.1");
         setError(
-          `Phantom returned "Unexpected error" on connect. This usually means one of:\n` +
+          `Phantom returned "Unexpected error" on connect. Try these in order:\n` +
           (usingIp
-            ? `1. You are on ${origin} — try http://localhost:3000 instead (Phantom is finicky about 127.0.0.1 vs localhost).\n`
+            ? `1. You are on ${origin} — switch to http://localhost:3000 (link above).\n`
             : "") +
-          `2. Phantom is locked — click the extension icon and unlock it.\n` +
-          `3. Another Solana wallet is conflicting — disable Backpack/Solflare/Glow if present.\n` +
-          `4. Phantom is in a stale state after switching networks — refresh the page.\n` +
+          `1. Click the Phantom extension icon — if you see a password screen, unlock it.\n` +
+          `2. Check the Chrome address bar for a 🚫 popup-blocked icon — allow popups for this site.\n` +
+          `3. Click "Reset & retry connect" below (force-disconnects any stuck session).\n` +
+          `4. Open the Phantom extension and look for a pending request — approve or dismiss it.\n` +
+          `5. Reload the page (⌘R / Ctrl+R) and try again.\n` +
+          `6. Paste this in DevTools console and report the output:\n` +
+          `   await window.phantom.solana.connect().catch(e => JSON.stringify(e, Object.getOwnPropertyNames(e)))\n` +
           `Wallet env: ${describeWalletEnv()}.`,
         );
       } else {
@@ -318,14 +328,25 @@ export default function PayPage() {
       )}
 
       {phantomDetected && !userPubkey && (
-        <button
-          onClick={handleConnect}
-          disabled={busy !== null}
-          data-testid="connect-phantom"
-          className="w-full bg-purple-600 hover:bg-purple-700 text-white py-3 rounded-lg font-semibold mb-4 disabled:opacity-50"
-        >
-          {busy === "connect" ? "Connecting…" : "Connect Phantom (Devnet)"}
-        </button>
+        <>
+          <button
+            onClick={() => handleConnect()}
+            disabled={busy !== null}
+            data-testid="connect-phantom"
+            className="w-full bg-purple-600 hover:bg-purple-700 text-white py-3 rounded-lg font-semibold mb-2 disabled:opacity-50"
+          >
+            {busy === "connect" ? "Connecting…" : "Connect Phantom (Devnet)"}
+          </button>
+          {error && /unexpected error/i.test(error) && (
+            <button
+              onClick={() => handleConnect({ reset: true })}
+              disabled={busy !== null}
+              className="w-full text-xs underline text-slate-500 mb-4"
+            >
+              Reset & retry connect (force-disconnect any stuck session)
+            </button>
+          )}
+        </>
       )}
 
       {userPubkey && (
