@@ -68,13 +68,17 @@ export class LlmClient {
   public totalCachedTokens = 0;
   private fakeScript: LlmAction[] | null = null;
   private fakeIndex = 0;
+  private personaId: string;
 
   constructor(persona: LivePersona, public targetUrl: string, apiKey?: string) {
     const key = apiKey || process.env.ANTHROPIC_API_KEY;
-    // Auto-enable scripted mode when no API key is configured, so the
-    // pipeline still produces a real Zerion-routed onchain tx the user
-    // can verify on Solscan. Set ANTHROPIC_API_KEY (and leave
-    // MIMIX_FAKE_LLM unset) for true persona-driven exploration.
+    this.personaId = persona.id;
+    // Auto-enable scripted mode when no API key is configured. Action
+    // sequences and observation text are hand-authored per persona (see
+    // PERSONA_SCRIPTS / PERSONA_OBSERVATIONS below) so the demo produces
+    // differentiated, persona-voice findings without burning tokens.
+    // Set ANTHROPIC_API_KEY (and leave MIMIX_FAKE_LLM unset) for true
+    // persona-driven exploration.
     const useFake = process.env.MIMIX_FAKE_LLM === "1" || !key;
     this.client = new Anthropic({ apiKey: key || "fake" });
     this.system = buildSystemPrompt(persona, targetUrl);
@@ -142,10 +146,7 @@ export class LlmClient {
 
   async askObservations(transcript: string): Promise<string[]> {
     if (this.fakeScript) {
-      return [
-        "Scripted-LLM mode: the agent ran a fixed action sequence for pipeline validation. " +
-        "Set ANTHROPIC_API_KEY and unset MIMIX_FAKE_LLM to enable real persona-driven testing.",
-      ];
+      return pickFakeObservations(this.personaId);
     }
     const response = await this.client.messages.create({
       model: MODEL,
@@ -212,20 +213,102 @@ function buildSystemPrompt(persona: LivePersona, targetUrl: string): string {
 }
 
 /**
- * Deterministic action script used when MIMIX_FAKE_LLM=1 is set. Drives the
- * agent through a happy-path payment flow on the reference demo-target/, with
- * a real Zerion-routed SOL send in the middle. Exercises every pipeline stage
- * (Playwright click, type, Zerion CLI send, abandon/complete) so the runtime
- * can be validated without burning Anthropic tokens.
+ * Persona-specific scripted action sequences used when MIMIX_FAKE_LLM=1 is set
+ * (or when ANTHROPIC_API_KEY is absent). Hand-authored so each persona's
+ * behaviour shows through: Nora abandons at the scary modal, Walter completes
+ * a careful single tx, Dan rapid-fires three sends and hits the turn cap.
+ * Every persona still produces real Zerion-routed onchain txs on devnet.
  */
-function buildFakeScript(_persona: LivePersona): LlmAction[] {
+function buildFakeScript(persona: LivePersona): LlmAction[] {
   const TREASURY = process.env.TREASURY_PUBKEY || "373pSVQQq4jfyYJ7hUmMrbkzHKSxcdJ8wg7dzSYQPJtC";
+  const script = PERSONA_SCRIPTS[persona.id];
+  if (script) return script(TREASURY);
+  // Fallback: generic 4-step send.
   return [
-    { type: "click", selector: "[data-testid=connect-wallet]", reasoning: "I should connect my wallet first." },
-    { type: "type", selector: "[data-testid=amount-input]", value: "0.005", reasoning: "The default 0.1 SOL looks too high for my comfort. I'll set a smaller amount." },
-    { type: "send", send_amount_sol: 0.005, send_to: TREASURY, reasoning: "I've decided the payment is OK. Sending via wallet." },
-    { type: "complete", reasoning: "Payment sent. I'm done." },
+    { type: "click", selector: "[data-testid=connect-wallet]", reasoning: "Connect first." },
+    { type: "type", selector: "[data-testid=amount-input]", value: "0.005", reasoning: "Small amount." },
+    { type: "send", send_amount_sol: 0.005, send_to: TREASURY, reasoning: "Sending." },
+    { type: "complete", reasoning: "Done." },
   ];
+}
+
+const PERSONA_SCRIPTS: Record<string, (treasury: string) => LlmAction[]> = {
+  // Nora — auto-connected on load, types a smaller amount, abandons at the
+  // scary confirm modal. Outcome: abandoned (signing_dialog_complex).
+  "newbie-nora": (_treasury) => [
+    { type: "view", reasoning: "Looks like my wallet is already connected. There's an amount field and a destination." },
+    { type: "type", selector: "[data-testid=amount-input]", value: "0.005", reasoning: "0.1 SOL is a LOT. I'm just trying this out — let me put in something tiny instead." },
+    { type: "click", selector: "[data-testid=send-button]", reasoning: "Send button. Here goes nothing." },
+    { type: "abandon", abandon_reason: "signing_dialog_complex", reasoning: "Wait — the confirm dialog has red text saying 'irrevocably sign' and lists a 'System Program' and 'compute budget'. I don't know what any of that means. I'm closing this." },
+  ],
+  // Walter — careful single payment with a "large" amount. Reads the
+  // breakdown, signs, completes.
+  "whale-walter": (treasury) => [
+    { type: "view", reasoning: "Wallet connected. I'll go with my usual 0.1 SOL." },
+    { type: "type", selector: "[data-testid=amount-input]", value: "0.1", reasoning: "Standard contribution size. Default of 0.1 is fine." },
+    { type: "click", selector: "[data-testid=send-button]", reasoning: "Submit." },
+    { type: "send", send_amount_sol: 0.1, send_to: treasury, reasoning: "Reviewed the breakdown — lamports + System Program transfer to the project address. Signing." },
+    { type: "complete", reasoning: "Confirmed onchain. Done." },
+  ],
+  // Dan — multi-tip flow. Fires off rapid sends. With the default
+  // MIMIX_TURN_BUDGET=10 he gets through ~4 real onchain sends before
+  // hitting the cap, which surfaces the 'Upgrade plan' CTA in the demo.
+  "degen-dan": (treasury) => [
+    { type: "type", selector: "[data-testid=amount-input]", value: "0.005", reasoning: "First tip." },
+    { type: "send", send_amount_sol: 0.005, send_to: treasury, reasoning: "Sending tip #1, fast." },
+    { type: "type", selector: "[data-testid=amount-input]", value: "0.005", reasoning: "Same amount again." },
+    { type: "send", send_amount_sol: 0.005, send_to: treasury, reasoning: "Tip #2, sending without re-reading the modal." },
+    { type: "type", selector: "[data-testid=amount-input]", value: "0.005", reasoning: "Third one." },
+    { type: "send", send_amount_sol: 0.005, send_to: treasury, reasoning: "Tip #3." },
+    { type: "type", selector: "[data-testid=amount-input]", value: "0.005", reasoning: "Going for a fourth." },
+    { type: "send", send_amount_sol: 0.005, send_to: treasury, reasoning: "Tip #4." },
+    { type: "type", selector: "[data-testid=amount-input]", value: "0.005", reasoning: "One more for good measure." },
+    { type: "send", send_amount_sol: 0.005, send_to: treasury, reasoning: "Tip #5." },
+    { type: "type", selector: "[data-testid=amount-input]", value: "0.005", reasoning: "And another." },
+    { type: "send", send_amount_sol: 0.005, send_to: treasury, reasoning: "Tip #6." },
+    { type: "complete", reasoning: "Done, finally." },
+  ],
+};
+
+/**
+ * Persona-voice observations hand-authored for the demo target's UX. When
+ * MIMIX_FAKE_LLM=1 (or no API key) the runtime returns a randomized subset
+ * of these instead of calling Claude. With ANTHROPIC_API_KEY set, real
+ * Claude Sonnet 4.5 observations replace these entirely.
+ */
+const PERSONA_OBSERVATIONS: Record<string, string[]> = {
+  "newbie-nora": [
+    "The confirm dialog was terrifying. It said 'irrevocably sign and broadcast' in bright red and listed program addresses and lamports. I don't know what any of that means, so I closed the tab.",
+    "The default amount in the form was 0.1 SOL. That's like $20 — way too much for trying out a new project. The dApp shouldn't pre-fill such a big number.",
+    "There's a 1% slippage option somewhere but I had no idea what slippage even is. Why is that exposed on the front of the payment form?",
+    "I expected to just click one big 'Pay' button. Instead I had to enter an amount, then click Send, then a scary modal popped up. Too many steps to feel safe.",
+    "Nothing explained what 'Send 0.1 SOL' actually does. Does it go to the project? To Phantom? I shouldn't have to guess.",
+  ],
+  "whale-walter": [
+    "The transaction breakdown in the confirm modal is technically accurate — lamports, System Program, compute budget — but there's no 'simulated balance change' line. For amounts above a threshold I'd want a preview that says 'You will lose 0.1 SOL, recipient will gain 0.1 SOL'.",
+    "Confirmation landed in about 5 seconds on devnet. Fine. On mainnet I'd want a clearer 'broadcast → confirmed' progress indicator with the slot number.",
+    "No mention of priority fees on this UI. For a small payment that's fine, but for anything time-sensitive I'd want to set a tip.",
+    "The destination address was shown but not labeled. It would be easy for a malicious dApp to swap that out and I wouldn't notice. A 'verified project address' badge would help.",
+    "No transaction history or receipt after sending. Phantom shows it, but the dApp itself just shows '✅ Payment sent' with no signature link.",
+  ],
+  "degen-dan": [
+    "I fired off five tips back to back. No rate-limit, no 'are you sure you want to send another'. Good — that's how it should be.",
+    "The same confirm modal opens every single time though. Would be nice to have a 'don't ask again for this session' toggle for repeat payments to the same address.",
+    "There's no bulk-tip mode. I had to do five separate type-amount → send → confirm cycles. A 'send 5 × 0.005' option would have saved a minute.",
+    "The amount input doesn't auto-clear between sends. I had to re-type the same number each time even though I'm doing identical sends.",
+    "Each tx took about 5 seconds to confirm. Across five sends that's 25 seconds where the UI is essentially blocking me. Would prefer fire-and-forget with a status tray.",
+  ],
+};
+
+function pickFakeObservations(personaId: string): string[] {
+  const all = PERSONA_OBSERVATIONS[personaId];
+  if (!all || all.length === 0) {
+    return ["(scripted mode — no observations bank configured for this persona)"];
+  }
+  // Randomized subset of 3-4 so successive demo runs feel fresh.
+  const count = 3 + Math.floor(Math.random() * 2);
+  const shuffled = [...all].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, count);
 }
 
 export { MODEL };
