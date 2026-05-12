@@ -18,6 +18,7 @@ runs/*
 .DS_Store
 .turbo/
 .vercel/
+.playwright-mcp/
 
 packages/zerion-fork/skills/*/node_modules/
 
