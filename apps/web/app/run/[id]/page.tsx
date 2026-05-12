@@ -19,6 +19,7 @@ const COLORS: Record<string, string> = {
   abandon: "text-red-600 font-medium",
   observation: "text-purple-700",
   complete: "text-emerald-700 font-medium",
+  budget_exceeded: "text-orange-700 font-semibold",
   error: "text-red-500",
 };
 
@@ -81,6 +82,7 @@ export default function RunPage() {
                 <span className={`text-xs px-2 py-1 rounded ${agent?.status === "complete" ? "bg-emerald-100 text-emerald-800" :
                   agent?.status === "abandoned" ? "bg-red-100 text-red-800" :
                   agent?.status === "running" ? "bg-blue-100 text-blue-800" :
+                  agent?.status === "capped" ? "bg-orange-100 text-orange-800" :
                   agent?.status === "failed" ? "bg-orange-100 text-orange-800" :
                   "bg-slate-100 text-slate-600"}`}>
                   {agent?.status || "pending"}
@@ -105,7 +107,13 @@ export default function RunPage() {
                     )}
                     {ev.type === "policy_block" && `${ev.attempted}: ${ev.reason}`}
                     {ev.type === "abandon" && ev.reason}
-                    {ev.type === "observation" && <em>“{ev.text}”</em>}
+                    {ev.type === "observation" && <em>"{ev.text}"</em>}
+                    {ev.type === "budget_exceeded" && (
+                      <>
+                        cap reached @ {ev.turns_used} turns —{" "}
+                        <a href="#" className="underline">upgrade plan</a>
+                      </>
+                    )}
                     {ev.type === "error" && ev.message}
                     {ev.reasoning && <div className="text-slate-500 pl-3">// {ev.reasoning}</div>}
                   </div>

@@ -12,6 +12,12 @@ import {
   sendAndConfirmTransaction,
   clusterApiUrl,
 } from "@solana/web3.js";
+import {
+  getOrCreateAssociatedTokenAccount,
+  mintTo,
+} from "@solana/spl-token";
+
+const USDG_DECIMALS = 6;
 
 function getConnection(): Connection {
   const url = process.env.SOLANA_RPC_URL || clusterApiUrl("devnet");
@@ -32,7 +38,11 @@ function loadTreasury(): Keypair {
   return Keypair.fromSecretKey(Uint8Array.from(raw));
 }
 
-export async function fundFromTreasury(toPubkey: string, amountSol: number) {
+export async function fundFromTreasury(
+  toPubkey: string,
+  amountSol: number,
+  amountUsdg: number = 0,
+) {
   const conn = getConnection();
   const treasury = loadTreasury();
   const lamports = Math.round(amountSol * 1_000_000_000);
@@ -45,6 +55,7 @@ export async function fundFromTreasury(toPubkey: string, amountSol: number) {
     );
   }
 
+  // SOL transfer
   const tx = new Transaction().add(
     SystemProgram.transfer({
       fromPubkey: treasury.publicKey,
@@ -52,12 +63,36 @@ export async function fundFromTreasury(toPubkey: string, amountSol: number) {
       lamports,
     }),
   );
-
-  const signature = await sendAndConfirmTransaction(conn, tx, [treasury], {
+  const solSig = await sendAndConfirmTransaction(conn, tx, [treasury], {
     commitment: "confirmed",
   });
 
-  return { signature, amountSol, toPubkey };
+  let usdgSig: string | null = null;
+  if (amountUsdg > 0) {
+    const mintAddress = process.env.USDG_MINT;
+    if (!mintAddress) {
+      throw new Error("USDG_MINT not set — run `pnpm deploy:usdg` first");
+    }
+    const mint = new PublicKey(mintAddress);
+    const recipient = new PublicKey(toPubkey);
+    // Treasury pays rent for the ATA if it does not exist yet.
+    const ata = await getOrCreateAssociatedTokenAccount(
+      conn,
+      treasury,
+      mint,
+      recipient,
+    );
+    usdgSig = await mintTo(
+      conn,
+      treasury,
+      mint,
+      ata.address,
+      treasury,
+      Math.round(amountUsdg * 10 ** USDG_DECIMALS),
+    );
+  }
+
+  return { signature: solSig, usdgSignature: usdgSig, amountSol, amountUsdg, toPubkey };
 }
 
 export async function getBalance(pubkey: string): Promise<number> {

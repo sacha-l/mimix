@@ -27,7 +27,14 @@ import { EventLog } from "./events.js";
 import { LlmClient, type LlmAction } from "./llm.js";
 import { launchBrowser, injectPhantomStub, takeScreenshotBase64 } from "./browser.js";
 
-const MAX_TURNS = 30;
+// Per-persona turn budget — this is the soft cap that maps to the user's
+// pricing tier ($5 USDG = TURN_BUDGET turns of agent exploration). When
+// exceeded the runtime stops, asks the LLM for observations from the
+// partial transcript, and writes a capped report fragment with an
+// "Upgrade plan" CTA hint.
+const TURN_BUDGET = parseInt(process.env.MIMIX_TURN_BUDGET || "10", 10);
+const HARD_TURN_CEILING = 30;
+const MAX_TURNS = Math.min(TURN_BUDGET, HARD_TURN_CEILING);
 const MAX_WALL_CLOCK_MS = 10 * 60_000;
 const SOL_USD_ESTIMATE = 200;
 
@@ -45,10 +52,15 @@ async function run(opts: RunOpts): Promise<number> {
   const eventLog = new EventLog(opts.runDir, opts.personaId);
   eventLog.emit({ type: "action", action: "view", reasoning: "agent starting" });
 
-  // 1. Create + fund Zerion wallet
+  // 1. Create + fund Zerion wallet (SOL for the Zerion-routed send +
+  // USDG for marketplace-narrative balance visible to the dApp).
   const walletName = `${opts.runId}-${opts.personaId}`;
   const wallet = await createWallet(walletName);
-  await fundFromTreasury(wallet.solAddress, persona.wallet.starting_balance_sol);
+  await fundFromTreasury(
+    wallet.solAddress,
+    persona.wallet.starting_balance_sol,
+    persona.wallet.starting_balance_usdg,
+  );
 
   // 2. Launch browser, inject mock Phantom
   const browser = await launchBrowser();
@@ -73,8 +85,11 @@ async function run(opts: RunOpts): Promise<number> {
   let failedStep: string | undefined;
   const txSignatures: string[] = [];
   const recentActions: { action: string; selector?: string; reasoning?: string }[] = [];
+  let turnsUsed = 0;
+  let capped = false;
 
   for (let turn = 1; turn <= MAX_TURNS; turn++) {
+    turnsUsed = turn;
     const elapsed = Date.now() - sessionStart;
     if (elapsed > MAX_WALL_CLOCK_MS) {
       eventLog.emit({ type: "error", message: "wall_clock_exceeded" });
@@ -207,6 +222,17 @@ async function run(opts: RunOpts): Promise<number> {
     });
   }
 
+  // Detect cap: loop completed all MAX_TURNS iterations without the
+  // outcome being explicitly set to completed/abandoned.
+  if (outcome === "failed" && !failedStep && turnsUsed >= MAX_TURNS) {
+    capped = true;
+    eventLog.emit({
+      type: "budget_exceeded",
+      turns_used: turnsUsed,
+      suggested_tier: "pro",
+    });
+  }
+
   // 4. Wrap up — ask LLM for observations
   let observations: string[] = [];
   try {
@@ -229,6 +255,9 @@ async function run(opts: RunOpts): Promise<number> {
     failed_step: failedStep,
     observations,
     tx_signatures: txSignatures,
+    capped,
+    turns_used: turnsUsed,
+    turn_budget: MAX_TURNS,
     llm_usage: {
       input_tokens: llm.totalInputTokens,
       output_tokens: llm.totalOutputTokens,

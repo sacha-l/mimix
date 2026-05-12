@@ -10,7 +10,7 @@ wallet:
   chain: solana
   network: devnet
   starting_balance_sol: 0.05
-  starting_balance_usdg: 0
+  starting_balance_usdg: 25
 
 policy:
   max_spend_per_tx_usd: 2

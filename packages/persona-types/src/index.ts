@@ -84,9 +84,10 @@ export type RunEvent =
   | (EventBase & { type: "observation"; text: string })
   | (EventBase & { type: "abandon"; reason: string; step?: string })
   | (EventBase & { type: "complete" })
+  | (EventBase & { type: "budget_exceeded"; turns_used: number; suggested_tier: string })
   | (EventBase & { type: "error"; message: string });
 
-export type AgentStatus = "pending" | "running" | "complete" | "abandoned" | "failed";
+export type AgentStatus = "pending" | "running" | "complete" | "abandoned" | "capped" | "failed";
 
 export type RunState = {
   id: string;
@@ -114,6 +115,10 @@ export type ReportFragment = {
   failed_step?: string;
   observations: string[];
   tx_signatures: string[];
+  capped?: boolean;
+  turns_used?: number;
+  turn_budget?: number;
+  llm_usage?: { input_tokens: number; output_tokens: number; cached_tokens: number };
 };
 
 export type RunReport = {

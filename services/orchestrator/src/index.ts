@@ -93,10 +93,11 @@ async function runAgentsSequentially(
 
     // Read report fragment to determine outcome
     const fragment = readReportFragment(runDir, personaId);
-    const outcome: "complete" | "abandoned" | "failed" =
+    const outcome: "complete" | "abandoned" | "capped" | "failed" =
       fragment?.outcome === "completed" ? "complete"
         : fragment?.outcome === "abandoned" ? "abandoned"
-          : "failed";
+          : fragment?.capped ? "capped"
+            : "failed";
 
     state = readRunState(runDir);
     const eventsCount = countEvents(runDir, personaId);
