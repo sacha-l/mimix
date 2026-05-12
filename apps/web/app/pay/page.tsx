@@ -24,9 +24,25 @@ type PhantomProvider = {
 
 function getPhantom(): PhantomProvider | null {
   const w = window as any;
-  const p = w.phantom?.solana || w.solana;
+  // Strict: only accept window.phantom.solana. window.solana is a shared
+  // surface that other wallets (Backpack, Glow, etc.) fake-implement to
+  // appear drop-in compatible — calling .connect() on those returns
+  // "Unexpected error" because the call signature is subtly different.
+  const p = w.phantom?.solana;
   if (p?.isPhantom) return p;
   return null;
+}
+
+function describeWalletEnv(): string {
+  const w = window as any;
+  const parts: string[] = [];
+  if (w.phantom?.solana?.isPhantom) parts.push("window.phantom.solana=Phantom");
+  else if (w.phantom) parts.push("window.phantom=present-but-no-solana");
+  if (w.solana) parts.push(`window.solana(isPhantom=${!!w.solana.isPhantom})`);
+  if (w.solflare) parts.push("Solflare");
+  if (w.backpack) parts.push("Backpack");
+  if (w.glow) parts.push("Glow");
+  return parts.length ? parts.join(" · ") : "no Solana wallet detected";
 }
 
 const USDG_DECIMALS = 6;
@@ -89,15 +105,31 @@ export default function PayPage() {
     setBusy("connect");
     try {
       const p = getPhantom();
-      if (!p) throw new Error("Phantom not detected — install it from phantom.app");
+      if (!p) {
+        throw new Error(`Phantom not detected. Wallet env: ${describeWalletEnv()}`);
+      }
       const res = await p.connect();
       setUserPubkey(res.publicKey.toString());
     } catch (e: any) {
       const code = e?.code ?? e?.error?.code;
-      if (code === 4001 || /user rejected/i.test(e?.message || "")) {
+      const msg = e?.message || "";
+      if (code === 4001 || /user rejected/i.test(msg)) {
         setError("Connection cancelled in Phantom.");
+      } else if (/unexpected error/i.test(msg)) {
+        const origin = typeof window !== "undefined" ? window.location.origin : "";
+        const usingIp = origin.includes("127.0.0.1");
+        setError(
+          `Phantom returned "Unexpected error" on connect. This usually means one of:\n` +
+          (usingIp
+            ? `1. You are on ${origin} — try http://localhost:3000 instead (Phantom is finicky about 127.0.0.1 vs localhost).\n`
+            : "") +
+          `2. Phantom is locked — click the extension icon and unlock it.\n` +
+          `3. Another Solana wallet is conflicting — disable Backpack/Solflare/Glow if present.\n` +
+          `4. Phantom is in a stale state after switching networks — refresh the page.\n` +
+          `Wallet env: ${describeWalletEnv()}.`,
+        );
       } else {
-        setError(`connect_failed: ${e?.message || JSON.stringify(e)}`);
+        setError(`connect_failed: ${msg || JSON.stringify(e)} (env: ${describeWalletEnv()})`);
       }
     } finally {
       setBusy(null);
@@ -344,7 +376,7 @@ export default function PayPage() {
         </button>
       )}
 
-      {error && <div className="mt-4 text-sm text-red-600 font-mono">{error}</div>}
+      {error && <div className="mt-4 text-sm text-red-600 font-mono whitespace-pre-line">{error}</div>}
     </div>
   );
 }
