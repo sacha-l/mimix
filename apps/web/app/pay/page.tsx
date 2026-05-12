@@ -5,11 +5,12 @@ import {
   Connection,
   PublicKey,
   Transaction,
-  clusterApiUrl,
 } from "@solana/web3.js";
 import {
   createTransferInstruction,
   getAssociatedTokenAddress,
+  getAccount,
+  TokenAccountNotFoundError,
 } from "@solana/spl-token";
 
 type PhantomProvider = {
@@ -17,6 +18,7 @@ type PhantomProvider = {
   publicKey: { toString(): string } | null;
   connect: () => Promise<{ publicKey: { toString(): string } }>;
   disconnect: () => Promise<void>;
+  signTransaction: (tx: Transaction) => Promise<Transaction>;
   signAndSendTransaction: (tx: Transaction) => Promise<{ signature: string }>;
 };
 
@@ -87,11 +89,16 @@ export default function PayPage() {
     setBusy("connect");
     try {
       const p = getPhantom();
-      if (!p) throw new Error("Phantom not found");
+      if (!p) throw new Error("Phantom not detected — install it from phantom.app");
       const res = await p.connect();
       setUserPubkey(res.publicKey.toString());
     } catch (e: any) {
-      setError(e.message || "connect_failed");
+      const code = e?.code ?? e?.error?.code;
+      if (code === 4001 || /user rejected/i.test(e?.message || "")) {
+        setError("Connection cancelled in Phantom.");
+      } else {
+        setError(`connect_failed: ${e?.message || JSON.stringify(e)}`);
+      }
     } finally {
       setBusy(null);
     }
@@ -137,6 +144,31 @@ export default function PayPage() {
 
       const conn = new Connection(RPC_URL, "confirmed");
 
+      // Preflight 1: confirm sender has a USDG account on devnet with enough
+      // balance. If not, auto-call the faucet and continue.
+      let senderBalance = 0;
+      try {
+        const acct = await getAccount(conn, senderAta);
+        senderBalance = Number(acct.amount) / 10 ** USDG_DECIMALS;
+      } catch (err) {
+        if (!(err instanceof TokenAccountNotFoundError)) throw err;
+      }
+
+      if (senderBalance < amount) {
+        setBusy("faucet_auto");
+        const fr = await fetch("/api/faucet", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ pubkey: userPubkey }),
+        });
+        const fd = await fr.json();
+        if (!fr.ok) throw new Error(`faucet_auto_failed:${fd.error || "unknown"}`);
+        setFaucetResult({ sol: fd.sol?.signature, usdg: fd.usdg?.signature });
+        // Wait a beat for the new USDG balance to settle on RPC.
+        await new Promise((r) => setTimeout(r, 2000));
+        setBusy("pay");
+      }
+
       const tx = new Transaction().add(
         createTransferInstruction(
           senderAta,
@@ -150,9 +182,33 @@ export default function PayPage() {
       tx.recentBlockhash = blockhash;
       tx.feePayer = sender;
 
-      const { signature } = await p.signAndSendTransaction(tx);
+      // Sign only via Phantom, then broadcast via our own devnet connection.
+      // signTransaction bypasses Phantom's "network mismatch" check, so the
+      // user can pay even if Phantom is set to mainnet — the tx still
+      // lands on devnet because we control the broadcast RPC.
+      let signedTx: Transaction;
+      try {
+        signedTx = await p.signTransaction(tx);
+      } catch (e: any) {
+        const code = e?.code ?? e?.error?.code;
+        if (code === 4001 || /user rejected/i.test(e?.message || "")) {
+          throw new Error("user_rejected_in_phantom");
+        }
+        throw new Error(`phantom_sign_failed: ${e?.message || JSON.stringify(e)}`);
+      }
 
-      // Wait for confirmation, then verify server-side.
+      let signature: string;
+      try {
+        signature = await conn.sendRawTransaction(signedTx.serialize(), {
+          skipPreflight: false,
+          preflightCommitment: "confirmed",
+        });
+      } catch (e: any) {
+        // Surface preflight errors verbatim — they're the most useful.
+        const logs = e?.logs?.join("\n") || "";
+        throw new Error(`broadcast_failed: ${e?.message || e}${logs ? "\nlogs:\n" + logs : ""}`);
+      }
+
       await conn.confirmTransaction(
         { signature, blockhash, lastValidBlockHeight },
         "confirmed",
