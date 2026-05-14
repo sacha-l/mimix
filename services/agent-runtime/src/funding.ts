@@ -25,10 +25,13 @@ function getConnection(): Connection {
 }
 
 function loadTreasury(): Keypair {
+  const inline = process.env.TREASURY_KEYPAIR_JSON;
+  if (inline) {
+    const raw = JSON.parse(inline);
+    return Keypair.fromSecretKey(Uint8Array.from(raw));
+  }
   const path = process.env.TREASURY_KEYPAIR_PATH;
-  if (!path) throw new Error("TREASURY_KEYPAIR_PATH not set");
-  // Path is typically relative to project root; resolve from MIMIX_ROOT if set,
-  // otherwise the current working directory.
+  if (!path) throw new Error("TREASURY_KEYPAIR_JSON or TREASURY_KEYPAIR_PATH must be set");
   const root = process.env.MIMIX_ROOT || process.cwd();
   const fullPath = path.startsWith("/") ? path : `${root}/${path}`;
   if (!existsSync(fullPath)) {

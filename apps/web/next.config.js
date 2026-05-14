@@ -10,6 +10,7 @@ const nextConfig = {
     NEXT_PUBLIC_TREASURY_PUBKEY: process.env.TREASURY_PUBKEY,
     NEXT_PUBLIC_USDG_MINT: process.env.USDG_MINT,
     NEXT_PUBLIC_DEBUG_MODE: process.env.NEXT_PUBLIC_DEBUG_MODE,
+    NEXT_PUBLIC_DEFAULT_TARGET_URL: process.env.NEXT_PUBLIC_DEFAULT_TARGET_URL,
   },
 };
 module.exports = nextConfig;

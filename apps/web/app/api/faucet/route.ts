@@ -18,12 +18,17 @@ import {
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const ROOT = resolve(process.cwd(), "../..");
+const ROOT = process.env.MIMIX_ROOT || resolve(process.cwd(), "../..");
 const FAUCET_USDG_AMOUNT = 100;
 const FAUCET_SOL_AMOUNT = 0.05;
 const USDG_DECIMALS = 6;
 
 function loadTreasury(): Keypair {
+  const inline = process.env.TREASURY_KEYPAIR_JSON;
+  if (inline) {
+    const raw = JSON.parse(inline);
+    return Keypair.fromSecretKey(Uint8Array.from(raw));
+  }
   const path = process.env.TREASURY_KEYPAIR_PATH || "./treasury-keypair.json";
   const fullPath = path.startsWith("/") ? path : `${ROOT}/${path}`;
   if (!existsSync(fullPath)) {

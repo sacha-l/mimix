@@ -29,8 +29,13 @@ export function loadKeypair(path: string): Keypair {
 }
 
 export function loadTreasury(): Keypair {
+  const inline = process.env.TREASURY_KEYPAIR_JSON;
+  if (inline) {
+    const raw = JSON.parse(inline);
+    return Keypair.fromSecretKey(Uint8Array.from(raw));
+  }
   const path = process.env.TREASURY_KEYPAIR_PATH;
-  if (!path) throw new Error("TREASURY_KEYPAIR_PATH not set");
+  if (!path) throw new Error("TREASURY_KEYPAIR_JSON or TREASURY_KEYPAIR_PATH must be set");
   return loadKeypair(path);
 }
 

@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import type { RunState } from "@mimix/persona-types";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const ROOT = resolve(__dirname, "../../..");
+const ROOT = process.env.MIMIX_ROOT || resolve(__dirname, "../../..");
 
 export type CreateRunInput = {
   targetUrl: string;
