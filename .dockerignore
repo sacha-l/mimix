@@ -1,0 +1,17 @@
+**/node_modules
+**/.next
+**/dist
+runs
+.git
+.env
+.env.local
+.env.*.local
+treasury-keypair.json
+*.log
+.DS_Store
+.vscode
+.idea
+README.md
+spec.md
+LICENSE
+assets
