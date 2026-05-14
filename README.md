@@ -1,3 +1,14 @@
+---
+title: Mimix
+emoji: 🤖
+colorFrom: blue
+colorTo: purple
+sdk: docker
+app_port: 3000
+pinned: false
+short_description: AI personas that test your Solana dApp on devnet
+---
+
 <p align="center">
   <img src="./assets/logo-mark.png" alt="Mimix" width="160" />
 </p>
@@ -28,12 +39,15 @@ pnpm deploy:usdg
 # 4. (Optional) Add your Anthropic key for real LLM-driven personas.
 echo "ANTHROPIC_API_KEY=sk-ant-..." >> .env.local
 
-# 5. Run the app and the reference target dApp in two terminals.
+# 5. Run the app. The reference DemoPay target is already hosted at
+#    https://demo-target.vercel.app — no second terminal needed.
 pnpm dev               # Next.js on :3000
-pnpm dev:target        # reference target on :3001
+
+# Optional — only if you want to hack on the demo target UI locally:
+# pnpm dev:target      # reference target on :3001
 ```
 
-Open <http://localhost:3000> → **Start a run** → pick at least one live persona → **Skip payment (debug)** or pay with Phantom on devnet → watch the live dashboard → **Generate report**.
+Open <http://localhost:3000> → **Start a run** → `/register` is pre-filled with the hosted DemoPay, just press Continue → pick at least one live persona → **Skip payment (debug)** or pay with Phantom on devnet → watch the live dashboard → **Generate report**.
 
 Without `ANTHROPIC_API_KEY`, Mimix runs in scripted demo mode: every persona still produces a real onchain devnet transaction via the forked Zerion CLI, but their action sequence and observations come from hand-authored fixtures. Adding the key flips the same code path to real Claude Sonnet 4.5 inference.
 
@@ -154,7 +168,7 @@ parse signature from stdout JSON → emit { type: "tx", via: "zerion-cli" } to e
 
 `/register` accepts any URL. The agent runtime injects a `window.phantom.solana` stub via Playwright's `addInitScript` so the target dApp's wallet adapter discovers the persona's pubkey as if Phantom were installed. The agent navigates the dApp normally; the real onchain action happens out-of-band through the forked Zerion CLI.
 
-Most production Solana dApps default to mainnet and may refuse a devnet wallet. The reliable demo path is the bundled `demo-target/`. Full arbitrary-URL coverage is a v2 roadmap item.
+Most production Solana dApps default to mainnet and may refuse a devnet wallet. The reliable demo path is the bundled `demo-target/`, deployed at <https://demo-target.vercel.app> so a fresh clone can run end-to-end without `pnpm dev:target`. Full arbitrary-URL coverage is a v2 roadmap item.
 
 ---
 

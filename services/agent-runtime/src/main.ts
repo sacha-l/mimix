@@ -285,7 +285,7 @@ function toAgentAction(a: LlmAction): AgentAction {
 const opts: RunOpts = {
   runId: process.env.RUN_ID || `dev-${Date.now()}`,
   personaId: process.env.PERSONA_ID || "newbie-nora",
-  targetUrl: process.env.TARGET_URL || "http://localhost:3001",
+  targetUrl: process.env.TARGET_URL || "https://demo-target.vercel.app/?test=1",
   runDir: process.env.RUN_DIR || resolve(ROOT, "runs", process.env.RUN_ID || `dev-${Date.now()}`),
 };
 

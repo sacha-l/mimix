@@ -2,7 +2,8 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
-const DEMO_TARGET_URL = "http://127.0.0.1:3001/?test=1";
+const DEMO_TARGET_URL =
+  process.env.NEXT_PUBLIC_DEFAULT_TARGET_URL || "https://demo-target.vercel.app/?test=1";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -31,7 +32,7 @@ export default function RegisterPage() {
   return (
     <div className="max-w-xl">
       <h1 className="text-3xl font-bold mb-2">Register your dApp</h1>
-      <p className="text-slate-600 mb-8">Any Solana dApp URL. For the demo, point at the reference DemoPay.</p>
+      <p className="text-slate-600 mb-8">Any Solana dApp URL. For the demo, point at the hosted DemoPay.</p>
 
       <form onSubmit={handleContinue} className="space-y-5">
         <div>
@@ -48,7 +49,7 @@ export default function RegisterPage() {
             onClick={() => setUrl(DEMO_TARGET_URL)}
             className="text-xs text-slate-500 underline mt-1"
           >
-            Use the reference DemoPay
+            Use the hosted DemoPay
           </button>
         </div>
         <div>
