@@ -1,14 +1,3 @@
----
-title: Mimix
-emoji: 🤖
-colorFrom: blue
-colorTo: purple
-sdk: docker
-app_port: 3000
-pinned: false
-short_description: AI personas that test your Solana dApp on devnet
----
-
 <p align="center">
   <img src="./assets/logo-mark.png" alt="Mimix" width="160" />
 </p>
