@@ -2,8 +2,8 @@ id: newbie-nora
 display_name: Newbie Nora
 avatar_emoji: "🐣"
 status: live
-tagline: First-time Solana user. Easily confused.
-tests: Onboarding friction, signing UX, default amounts, confirmation modals.
+tagline: First-time user. Easily confused, reads everything.
+tests: Onboarding friction, unclear CTAs, scary dialogs, confusing defaults.
 price_usdg: 5
 
 wallet:

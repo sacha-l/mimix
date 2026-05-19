@@ -61,6 +61,12 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
             type: "string",
             description: `App URL to test. Default: ${DEFAULT_TARGET}`,
           },
+          target_kind: {
+            type: "string",
+            enum: ["web", "solana"],
+            description:
+              "'web' for a normal web app, 'solana' for a Solana dApp (adds a funded wallet + onchain leg). Defaults to 'solana' for the bundled demo target, 'web' otherwise.",
+          },
           personas: {
             type: "array",
             items: { type: "string" },
@@ -104,11 +110,20 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
     const requested = args.personas as string[] | undefined;
     const personas = requested && requested.length ? requested : listLivePersonas();
     const goal = (args.goal as string) || undefined;
+    const targetKind =
+      args.target_kind === "solana"
+        ? "solana"
+        : args.target_kind === "web"
+          ? "web"
+          : args.target_url
+            ? "web"
+            : "solana";
 
     const { runId } = createRun({
       targetUrl,
       targetName: "MCP run",
       targetDescription: "Started via the Mimix MCP server.",
+      targetKind,
       personas,
       paymentSignature: "mcp",
       paymentVerified: false,

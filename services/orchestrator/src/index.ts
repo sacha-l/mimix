@@ -2,9 +2,11 @@ import { spawn } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
 import { dirname, resolve, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { RunState } from "@mimix/persona-types";
+import type { RunState, TargetKind } from "@mimix/persona-types";
 import { recordRunForUser } from "./users";
 import { sendRunStartedEmail, sendReportReadyEmail } from "./email";
+import { isSignatureConsumed, consumeSignature } from "./payments";
+import { writeFileAtomic } from "./fs-atomic";
 
 export { registerUser, getUser, recordRunForUser } from "./users";
 export type { UserRecord, Questionnaire } from "./users";
@@ -16,6 +18,7 @@ export type CreateRunInput = {
   targetUrl: string;
   targetName: string;
   targetDescription: string;
+  targetKind?: TargetKind;
   personas: string[];
   paymentSignature: string;
   paymentVerified: boolean;
@@ -33,7 +36,7 @@ function readRunState(runDir: string): RunState {
 }
 
 function writeRunState(runDir: string, state: RunState): void {
-  writeFileSync(join(runDir, "run.json"), JSON.stringify(state, null, 2));
+  writeFileAtomic(join(runDir, "run.json"), JSON.stringify(state, null, 2));
 }
 
 function readReportFragment(runDir: string, personaId: string): any | null {
@@ -50,9 +53,20 @@ export function createRun(input: CreateRunInput): CreateRunResult {
   if (!input.personas.length) {
     throw new Error("createRun: at least one persona is required");
   }
+
+  // Payment-replay guard — a real payment signature unlocks one run only.
+  const sig = input.paymentSignature;
+  const isRealPayment =
+    input.paymentVerified && !!sig && sig !== "debug-skip" && sig !== "mcp";
+  if (isRealPayment && isSignatureConsumed(sig)) {
+    throw new Error("createRun: payment signature already used for another run");
+  }
+
   const runId = `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const runDir = join(ROOT, "runs", runId);
   mkdirSync(runDir, { recursive: true });
+
+  const targetKind: TargetKind = input.targetKind || "web";
 
   const state: RunState = {
     id: runId,
@@ -62,6 +76,7 @@ export function createRun(input: CreateRunInput): CreateRunResult {
       name: input.targetName,
       description: input.targetDescription,
     },
+    target_kind: targetKind,
     personas: input.personas,
     payment: {
       amount_usdg: input.personas.length * 5,
@@ -78,6 +93,10 @@ export function createRun(input: CreateRunInput): CreateRunResult {
   }
   writeRunState(runDir, state);
 
+  if (isRealPayment) {
+    consumeSignature(sig, runId);
+  }
+
   // Notify the operator and bump the user's run counter (best-effort).
   if (input.requesterEmail) {
     recordRunForUser(input.requesterEmail);
@@ -91,7 +110,7 @@ export function createRun(input: CreateRunInput): CreateRunResult {
   }).catch((err) => console.error(`[orchestrator] run-started email failed:`, err));
 
   // Fire-and-forget — sequential agent execution
-  runAgentsSequentially(runId, runDir, input.personas, input.targetUrl).catch((err) => {
+  runAgentsSequentially(runId, runDir, input.personas, input.targetUrl, targetKind, input.goal).catch((err) => {
     console.error(`[orchestrator] run ${runId} failed:`, err);
     try {
       const s = readRunState(runDir);
@@ -108,13 +127,15 @@ async function runAgentsSequentially(
   runDir: string,
   personas: string[],
   targetUrl: string,
+  targetKind: TargetKind,
+  goal?: string,
 ): Promise<void> {
   for (const personaId of personas) {
     let state = readRunState(runDir);
     state.agents[personaId] = { status: "running", events_count: 0 };
     writeRunState(runDir, state);
 
-    await spawnAgent(runId, personaId, targetUrl, runDir);
+    await spawnAgent(runId, personaId, targetUrl, runDir, targetKind, goal);
 
     // Read report fragment to determine outcome
     const fragment = readReportFragment(runDir, personaId);
@@ -164,6 +185,8 @@ function spawnAgent(
   personaId: string,
   targetUrl: string,
   runDir: string,
+  targetKind: TargetKind,
+  goal?: string,
 ): Promise<number> {
   // Backstop timeout — a hung agent (stuck navigation, wedged LLM call)
   // must not hang the whole run. Sits above the agent's own wall-clock cap.
@@ -179,6 +202,8 @@ function spawnAgent(
         RUN_ID: runId,
         PERSONA_ID: personaId,
         TARGET_URL: targetUrl,
+        TARGET_KIND: targetKind,
+        MIMIX_GOAL: goal || "",
         RUN_DIR: runDir,
         MIMIX_ROOT: ROOT,
       },

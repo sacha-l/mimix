@@ -25,7 +25,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {hasLlmKey ? (
           <div className="bg-emerald-50 border-b border-emerald-200 text-xs text-emerald-900">
             <div className="max-w-6xl mx-auto px-6 py-2">
-              🤖 <strong>LLM mode active</strong> — personas are exploring with Claude Opus 4.7. Per-run token usage shown on the report.
+              🤖 <strong>LLM mode active</strong> — personas are exploring with Claude (vision + tool-use). Per-run token usage shown on the report.
             </div>
           </div>
         ) : (

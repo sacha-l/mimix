@@ -9,18 +9,21 @@
 
 ## Current state
 
-Mimix is a working demo: a visitor registers an app URL, gives an email +
-goal + a short questionnaire, picks personas, pays (or skips in debug mode),
-watches a live run, and gets a report. The orchestrator spawns one agent
-process per persona; each agent drives a real headless browser with
-Playwright, decides actions with Claude Opus 4.7 (or hand-authored scripts
-when no API key is set), passes every action through the policy engine, and
-broadcasts a real Solana devnet transaction via the forked Zerion CLI. Runs
-and users are stored as JSON files (`runs/`, `users/`). SMTP email notifies
-the operator on run-start and the requester on report-ready. An MCP server
-(`services/mcp-server`) exposes `run_mimix` / `get_run_status` / `get_report`
-so a Claude client can drive runs. 3 live personas; 5 beta personas are
-card-only stubs.
+Mimix tests **any web app** (and, as a target kind, Solana dApps). A visitor
+registers an app URL, picks "Web app" or "Solana dApp", gives an email + goal +
+a short questionnaire, picks personas, pays (or skips in debug mode), watches a
+live run, and gets a report. The orchestrator spawns one agent process per
+persona; each agent drives a real headless browser with Playwright and decides
+actions with Claude (`MIMIX_MODEL`, default Sonnet 4.6; or hand-authored scripts
+with no API key). **Web** runs browse the app as-is — no wallet. **Solana** runs
+add a funded devnet Zerion wallet and a real onchain leg. For web runs the
+journey is the customer's stated goal; for Solana runs it's the persona's
+crypto journey. Runs/users stored as JSON files (`runs/`, `users/`). SMTP email
+notifies operator on run-start and requester on report-ready. An MCP server
+exposes `run_mimix` / `get_run_status` / `get_report`. Payments verify a USDC
+transfer to the operator wallet (replay-guarded); pricing is $9 Standard / $29
+Pro. 3 live personas; 5 beta personas are card-only stubs. Launch work lives on
+the `staging` branch.
 
 ---
 
@@ -28,40 +31,36 @@ card-only stubs.
 
 ### P1 — hardening & robustness
 
-- **Faucet is unprotected.** `apps/web/app/api/faucet/route.ts` mints 100 USDG
-  to any pubkey with no rate limit, per-pubkey cap, or origin check — trivially
-  drainable in a loop. Add a per-pubkey/IP daily cap (file-based counter).
 - **No auth on API routes.** `/api/runs`, `/api/runs/[id]`, `/api/runs/[id]/events`,
   `/api/pay/verify` are all open — anyone can create runs, watch any run's live
   SSE stream, or verify arbitrary transactions. Decide on a model (signed
   requester token, or accept it as a deliberate demo gap).
-- **Payment-signature replay.** `/api/pay/verify` will verify the same signature
-  for multiple runs. Track consumed signatures.
-- **Non-atomic file writes.** `run.json` and `users/*.json` are read-modify-write
-  with no locking — concurrent updates race and a crash mid-write corrupts the
-  file. Use write-temp-then-rename; consider a per-file lock for `users/`.
 - **Wrap-up LLM errors are silent.** If `askObservations` fails, the report
   fragment gets empty observations with no surfaced reason
   (`services/agent-runtime/src/main.ts`).
 
 ### P2 — product / roadmap
 
+- **Real-USDC payment UI.** The `/api/pay/verify` backend now checks a USDC
+  transfer to `MIMIX_PAYOUT_ADDRESS`, but the `/pay` page UI still drives the
+  old devnet USDG + Phantom flow. The first cohort is comped (debug skip); a
+  real USDC checkout UI (or a hosted checkout) still needs building.
+- **Tier → model wiring.** `MIMIX_MODEL` is global; the Pro tier should
+  per-run select Opus 4.7 while Standard uses Sonnet 4.6. Needs a `tier` field
+  on the run, threaded register → pay → `createRun` → agent env.
 - **Beta personas are stubs.** The 5 beta personas (`packages/personas/beta/`)
-  are card-only. To go live each needs `wallet` + `policy` + `behavior` +
-  `journey_goal`, a `PERSONA_SCRIPTS` entry and a `PERSONA_OBSERVATIONS` bank in
-  `services/agent-runtime/src/llm.ts`, then moving to `packages/personas/live/`.
-- **Monetization is disabled.** `/pricing` Starter + Pro tiers are "coming soon"
-  with disabled CTAs — no real purchase path.
-- **Mainnet payment path.** Devnet mock USDG → real mainnet USDC settlement is
-  unbuilt and undocumented.
+  are card-only. To go live each needs `behavior` + `policy` + a fake-mode
+  script, then moving to `packages/personas/live/`.
+- **Web-app persona set.** Web runs reuse the 3 crypto personas (behavior
+  profiles only); a purpose-built web-app persona set would sharpen findings.
 - **"Hosted version" is vaporware copy.** The layout banner promises a hosted
   SaaS; either build it or soften the copy.
-- **Report sharing.** `/report/[id]` only exports JSON — no "email me", share
-  link, or PDF.
-- **SSE reconnect.** `/run/[id]` now shows a "connection interrupted" banner but
+- **Report sharing.** `/report/[id]` only exports JSON — no manual "email me"
+  resend, share link, or PDF (auto report-ready email already fires).
+- **SSE reconnect.** `/run/[id]` shows a "connection interrupted" banner but
   relies on the browser's default retry — no explicit resume/backoff.
-- **Arbitrary-URL coverage.** Most production Solana dApps reject a devnet
-  wallet; only the bundled DemoPay target is reliable.
+- **Solana mainnet target testing.** Web targets work in production as-is;
+  testing a *mainnet* Solana dApp would need real mainnet wallet support.
 
 ### P3 — DX & quality
 
@@ -77,6 +76,14 @@ card-only stubs.
 
 ## Recently shipped
 
+- **Launch v1 (on `staging`):** engine decoupled from Solana — `target_kind`
+  `web`/`solana`, so any web app is testable (web runs skip wallet/funding/
+  Phantom/onchain-send; journey = customer goal). USDC payment verification +
+  payment-replay guard. Revised pricing ($9 Standard / $29 Pro, USDC). Per-run
+  model via `MIMIX_MODEL` (default Sonnet 4.6). Faucet per-pubkey daily cap.
+  Atomic file writes (`run.json` / `users` / `payments`). http(s) URL
+  validation on `/api/runs`. Target-kind selector on `/register`.
+  `release-plan.md` GTM doc added.
 - **Critical fixes:** orchestrator agent-spawn timeout (`MIMIX_AGENT_TIMEOUT_MS`)
   so a hung agent can't hang the whole run; `createRun` rejects 0-persona runs;
   error states on `/run/[id]` + `/report/[id]` (no more infinite "Loading…");

@@ -89,6 +89,7 @@ export default function PayPage() {
         target_dapp_url: pending.url,
         target_name: pending.name,
         target_description: pending.description,
+        target_kind: pending.targetKind,
         personas: pending.personas,
         payment_signature: signature,
         payment_verified: verified,

@@ -1,7 +1,9 @@
 import Anthropic from "@anthropic-ai/sdk";
-import type { LivePersona } from "@mimix/persona-types";
+import type { LivePersona, TargetKind } from "@mimix/persona-types";
 
-const MODEL = "claude-opus-4-7";
+// Model is a per-run cost lever: Sonnet 4.6 is the cost-effective default
+// (Standard tier); set MIMIX_MODEL=claude-opus-4-7 for the Pro tier.
+const MODEL = process.env.MIMIX_MODEL || "claude-sonnet-4-6";
 const MAX_TOKENS_PER_TURN = 1024;
 
 export type LlmAction =
@@ -70,8 +72,12 @@ export class LlmClient {
   private fakeIndex = 0;
   private personaId: string;
 
-  constructor(persona: LivePersona, public targetUrl: string, apiKey?: string) {
-    const key = apiKey || process.env.ANTHROPIC_API_KEY;
+  constructor(
+    persona: LivePersona,
+    public targetUrl: string,
+    opts: { apiKey?: string; targetKind?: TargetKind; goal?: string } = {},
+  ) {
+    const key = opts.apiKey || process.env.ANTHROPIC_API_KEY;
     this.personaId = persona.id;
     // Auto-enable scripted mode when no API key is configured. Action
     // sequences and observation text are hand-authored per persona (see
@@ -81,7 +87,7 @@ export class LlmClient {
     // persona-driven exploration.
     const useFake = process.env.MIMIX_FAKE_LLM === "1" || !key;
     this.client = new Anthropic({ apiKey: key || "fake" });
-    this.system = buildSystemPrompt(persona, targetUrl);
+    this.system = buildSystemPrompt(persona, targetUrl, opts.targetKind || "solana", opts.goal);
     if (useFake) {
       this.fakeScript = buildFakeScript(persona);
     }
@@ -181,9 +187,25 @@ export class LlmClient {
   }
 }
 
-function buildSystemPrompt(persona: LivePersona, targetUrl: string): string {
-  return [
-    `You are ${persona.display_name}, a Solana user testing a dApp at ${targetUrl}.`,
+function buildSystemPrompt(
+  persona: LivePersona,
+  targetUrl: string,
+  targetKind: TargetKind,
+  goal?: string,
+): string {
+  const isSolana = targetKind === "solana";
+  // Solana runs follow the persona's hand-authored crypto journey; web runs
+  // follow the customer's stated goal captured at registration.
+  const journey = isSolana
+    ? persona.journey_goal
+    : goal && goal.trim()
+      ? goal.trim()
+      : "Explore the app and try to complete its main user flow.";
+
+  const lines = [
+    isSolana
+      ? `You are ${persona.display_name}, a Solana user testing a dApp at ${targetUrl}.`
+      : `You are ${persona.display_name}, a user testing a web app at ${targetUrl}.`,
     ``,
     `BEHAVIOR PROFILE:`,
     `  Patience score: ${persona.behavior.patience_score}/10`,
@@ -195,21 +217,30 @@ function buildSystemPrompt(persona: LivePersona, targetUrl: string): string {
     `POLICY (you will be blocked if you violate these):`,
     `  Allowed actions: ${persona.policy.allowed_actions.join(", ")}`,
     `  Forbidden actions: ${persona.policy.forbidden_actions.join(", ")}`,
-    `  Max spend per tx (USD): ${persona.policy.max_spend_per_tx_usd}`,
-    `  Max total spend (USD): ${persona.policy.max_total_spend_usd}`,
     `  Session limit: ${persona.policy.session_duration_min} minutes`,
     ``,
     `JOURNEY GOAL:`,
-    persona.journey_goal,
+    journey,
     ``,
     `INSTRUCTIONS:`,
     `- Stay in character. Reason in the persona's first-person voice.`,
     `- Choose ONE action per turn using the 'act' tool.`,
-    `- Prefer [data-testid=...] selectors for click/type.`,
-    `- For 'send' actions, supply send_amount_sol and send_to. The runtime will execute the SOL transfer through the forked Zerion CLI; you do not need to click a Confirm button afterwards.`,
+    `- Prefer [data-testid=...] selectors for click/type; otherwise use clear CSS selectors.`,
+  ];
+  if (isSolana) {
+    lines.push(
+      `- For 'send' actions, supply send_amount_sol and send_to. The runtime will execute the SOL transfer through the forked Zerion CLI; you do not need to click a Confirm button afterwards.`,
+    );
+  } else {
+    lines.push(
+      `- This is a normal web app — there is no crypto wallet. Do not use the 'send' action.`,
+    );
+  }
+  lines.push(
     `- Abandon if your persona would genuinely give up (use abandon_reason from your abandonment_triggers list when possible).`,
     `- Mark 'complete' when the journey goal is achieved.`,
-  ].join("\n");
+  );
+  return lines.join("\n");
 }
 
 /**

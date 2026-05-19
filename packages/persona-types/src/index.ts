@@ -1,5 +1,8 @@
 export type PersonaStatus = "live" | "beta";
 
+/** A run either tests a generic web app or a Solana dApp (wallet + onchain leg). */
+export type TargetKind = "web" | "solana";
+
 export type PersonaCard = {
   id: string;
   display_name: string;
@@ -97,6 +100,7 @@ export type RunState = {
     name: string;
     description: string;
   };
+  target_kind?: TargetKind;
   personas: string[];
   payment: {
     amount_usdg: number;

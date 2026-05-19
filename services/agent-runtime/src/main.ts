@@ -20,7 +20,7 @@ process.env.MIMIX_ROOT = ROOT;
 
 import { loadLivePersona } from "@mimix/personas";
 import { checkAction } from "@mimix/policy-engine";
-import type { AgentAction } from "@mimix/persona-types";
+import type { AgentAction, TargetKind } from "@mimix/persona-types";
 import { createWallet, sendSol } from "./zerion.js";
 import { fundFromTreasury } from "./funding.js";
 import { EventLog } from "./events.js";
@@ -43,6 +43,8 @@ type RunOpts = {
   personaId: string;
   targetUrl: string;
   runDir: string;
+  targetKind: TargetKind;
+  goal?: string;
 };
 
 async function run(opts: RunOpts): Promise<number> {
@@ -52,30 +54,47 @@ async function run(opts: RunOpts): Promise<number> {
   const eventLog = new EventLog(opts.runDir, opts.personaId);
   eventLog.emit({ type: "action", action: "view", reasoning: "agent starting" });
 
-  // 1. Create + fund Zerion wallet (SOL for the Zerion-routed send +
-  // USDG for marketplace-narrative balance visible to the dApp).
-  const walletName = `${opts.runId}-${opts.personaId}`;
-  const wallet = await createWallet(walletName);
-  await fundFromTreasury(
-    wallet.solAddress,
-    persona.wallet.starting_balance_sol,
-    persona.wallet.starting_balance_usdg,
-  );
+  const isSolana = opts.targetKind === "solana";
 
-  // 2. Launch browser, inject mock Phantom
+  // 1. Solana targets get a funded Zerion wallet (SOL for the Zerion-routed
+  // send + USDG for the balance the dApp sees). Web targets need none of this.
+  let walletName = "";
+  let solAddress: string | undefined;
+  if (isSolana) {
+    walletName = `${opts.runId}-${opts.personaId}`;
+    const wallet = await createWallet(walletName);
+    solAddress = wallet.solAddress;
+    await fundFromTreasury(
+      wallet.solAddress,
+      persona.wallet.starting_balance_sol,
+      persona.wallet.starting_balance_usdg,
+    );
+  }
+
+  // 2. Launch browser; inject the mock Phantom only for Solana targets.
   const browser = await launchBrowser();
   const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
   const page = await context.newPage();
-  await injectPhantomStub(page, { solAddress: wallet.solAddress });
+  if (isSolana && solAddress) {
+    await injectPhantomStub(page, { solAddress });
+  }
 
-  // Navigate with ?test=1 so the demo target activates its agent-friendly mode.
-  const url = new URL(opts.targetUrl);
-  url.searchParams.set("test", "1");
-  url.searchParams.set("agent", opts.personaId);
-  await page.goto(url.toString(), { waitUntil: "domcontentloaded", timeout: 30_000 });
+  // Navigate. The Solana demo target gets ?test=1&agent= activation params;
+  // a real customer URL is loaded untouched so we don't mutate their app.
+  let navUrl = opts.targetUrl;
+  if (isSolana) {
+    const u = new URL(opts.targetUrl);
+    u.searchParams.set("test", "1");
+    u.searchParams.set("agent", opts.personaId);
+    navUrl = u.toString();
+  }
+  await page.goto(navUrl, { waitUntil: "domcontentloaded", timeout: 30_000 });
 
   // 3. LLM loop
-  const llm = new LlmClient(persona, opts.targetUrl);
+  const llm = new LlmClient(persona, opts.targetUrl, {
+    targetKind: opts.targetKind,
+    goal: opts.goal,
+  });
   const sessionStart = Date.now();
   let spentSoFar = 0;
   let lastBlock: string | undefined;
@@ -160,6 +179,16 @@ async function run(opts: RunOpts): Promise<number> {
       break;
     }
     if (llmAction.type === "send") {
+      if (!isSolana) {
+        eventLog.emit({
+          type: "policy_block",
+          attempted: "send",
+          reason: "send_unavailable_for_web_target",
+        });
+        lastBlock = "send is unavailable — this run is testing a web app, not a wallet flow";
+        recentActions.push({ action: "BLOCKED:send", reasoning: "no wallet on a web target" });
+        continue;
+      }
       try {
         const sendRes = await sendSol({
           walletName,
@@ -287,6 +316,10 @@ const opts: RunOpts = {
   personaId: process.env.PERSONA_ID || "newbie-nora",
   targetUrl: process.env.TARGET_URL || "https://demo-target.vercel.app/?test=1",
   runDir: process.env.RUN_DIR || resolve(ROOT, "runs", process.env.RUN_ID || `dev-${Date.now()}`),
+  // Standalone-dev fallback is the Solana demo target; the orchestrator always
+  // sets TARGET_KIND explicitly for real runs.
+  targetKind: process.env.TARGET_KIND === "web" ? "web" : "solana",
+  goal: process.env.MIMIX_GOAL || undefined,
 };
 
 run(opts).then((code) => process.exit(code)).catch((err) => {
