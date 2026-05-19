@@ -92,6 +92,8 @@ export default function PayPage() {
         personas: pending.personas,
         payment_signature: signature,
         payment_verified: verified,
+        requester_email: pending.email,
+        goal: pending.goal,
       }),
     });
     const data = await res.json();

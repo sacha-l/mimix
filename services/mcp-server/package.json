@@ -1,0 +1,17 @@
+{
+  "name": "@mimix/mcp-server",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "main": "./src/index.ts",
+  "dependencies": {
+    "@mimix/orchestrator": "workspace:*",
+    "@mimix/personas": "workspace:*",
+    "@mimix/persona-types": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.12.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3"
+  }
+}

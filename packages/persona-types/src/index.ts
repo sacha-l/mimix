@@ -105,6 +105,10 @@ export type RunState = {
   };
   status: "pending" | "running" | "complete" | "failed";
   agents: Record<string, { status: AgentStatus; events_count: number }>;
+  requester?: {
+    email: string;
+    goal?: string;
+  };
 };
 
 export type ReportFragment = {

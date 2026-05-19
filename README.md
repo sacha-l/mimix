@@ -4,7 +4,7 @@
 
 # Mimix
 
-Hire AI personas to test your Solana dApp. They browse it, sign real transactions, and tell you what they hated.
+Hire AI personas to test your app. They browse it, complete real tasks, and tell you what they hated.
 
 ---
 
@@ -38,7 +38,7 @@ pnpm dev               # Next.js on :3000
 
 Open <http://localhost:3000> → **Start a run** → `/register` is pre-filled with the hosted DemoPay, just press Continue → pick at least one live persona → **Skip payment (debug)** or pay with Phantom on devnet → watch the live dashboard → **Generate report**.
 
-Without `ANTHROPIC_API_KEY`, Mimix runs in scripted demo mode: every persona still produces a real onchain devnet transaction via the forked Zerion CLI, but their action sequence and observations come from hand-authored fixtures. Adding the key flips the same code path to real Claude Sonnet 4.5 inference.
+Without `ANTHROPIC_API_KEY`, Mimix runs in scripted demo mode: every persona still produces a real onchain devnet transaction via the forked Zerion CLI, but their action sequence and observations come from hand-authored fixtures. Adding the key flips the same code path to real Claude Opus 4.7 inference.
 
 ---
 
@@ -66,7 +66,7 @@ Without `ANTHROPIC_API_KEY`, Mimix runs in scripted demo mode: every persona sti
             │   │ Playwright headless     │    │ │
             │   │  + window.phantom stub  │    │ │
             │   ├─────────────────────────┤    │ │
-            │   │ Claude Sonnet 4.5       │    │ │
+            │   │ Claude Opus 4.7         │    │ │
             │   │  vision + tool-use      │    │ │
             │   │  + prompt caching       │    │ │
             │   ├─────────────────────────┤    │ │
@@ -165,7 +165,7 @@ Most production Solana dApps default to mainnet and may refuse a devnet wallet. 
 
 | Variable | Required | Notes |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | Optional | Enables real Claude Sonnet 4.5 mode. Without it, scripted fixtures drive the agents. |
+| `ANTHROPIC_API_KEY` | Optional | Enables real Claude Opus 4.7 mode. Without it, scripted fixtures drive the agents. |
 | `SOLANA_RPC_URL` | Optional | Defaults to `https://api.devnet.solana.com`. |
 | `TREASURY_KEYPAIR_PATH` | Yes | JSON secret-key file. Gitignored. Written by `pnpm setup:treasury`. |
 | `TREASURY_PUBKEY` | Auto | Written to `.env.local` by `pnpm setup:treasury`. |
@@ -189,4 +189,4 @@ All signed by an ephemeral persona keypair created by the forked Zerion CLI and 
 
 ---
 
-Built with [Claude Code](https://claude.com/claude-code). MIT — see `LICENSE`.
+Built by [Sacha Lansky](https://github.com/sacha-l) · [@sachalansky](https://x.com/sachalansky), with [Claude Code](https://claude.com/claude-code). © 2026 Sacha Lansky. MIT — see `LICENSE`.

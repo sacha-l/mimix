@@ -6,6 +6,10 @@
   "exports": { ".": "./src/index.ts" },
   "dependencies": {
     "@mimix/persona-types": "workspace:*",
-    "@mimix/personas": "workspace:*"
+    "@mimix/personas": "workspace:*",
+    "nodemailer": "^6.9.16"
+  },
+  "devDependencies": {
+    "@types/nodemailer": "^6.4.17"
   }
 }

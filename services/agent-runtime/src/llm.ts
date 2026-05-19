@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { LivePersona } from "@mimix/persona-types";
 
-const MODEL = "claude-sonnet-4-5-20250929";
+const MODEL = "claude-opus-4-7";
 const MAX_TOKENS_PER_TURN = 1024;
 
 export type LlmAction =

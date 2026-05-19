@@ -3,6 +3,11 @@ import { mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
 import { dirname, resolve, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { RunState } from "@mimix/persona-types";
+import { recordRunForUser } from "./users";
+import { sendRunStartedEmail, sendReportReadyEmail } from "./email";
+
+export { registerUser, getUser, recordRunForUser } from "./users";
+export type { UserRecord, Questionnaire } from "./users";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = process.env.MIMIX_ROOT || resolve(__dirname, "../../..");
@@ -14,6 +19,8 @@ export type CreateRunInput = {
   personas: string[];
   paymentSignature: string;
   paymentVerified: boolean;
+  requesterEmail?: string;
+  goal?: string;
 };
 
 export type CreateRunResult = {
@@ -63,7 +70,22 @@ export function createRun(input: CreateRunInput): CreateRunResult {
       input.personas.map((p) => [p, { status: "pending" as const, events_count: 0 }]),
     ),
   };
+  if (input.requesterEmail) {
+    state.requester = { email: input.requesterEmail, goal: input.goal };
+  }
   writeRunState(runDir, state);
+
+  // Notify the operator and bump the user's run counter (best-effort).
+  if (input.requesterEmail) {
+    recordRunForUser(input.requesterEmail);
+  }
+  sendRunStartedEmail({
+    requesterEmail: input.requesterEmail,
+    target: { url: input.targetUrl, name: input.targetName },
+    personas: input.personas,
+    goal: input.goal,
+    runId,
+  }).catch((err) => console.error(`[orchestrator] run-started email failed:`, err));
 
   // Fire-and-forget — sequential agent execution
   runAgentsSequentially(runId, runDir, input.personas, input.targetUrl).catch((err) => {
@@ -109,6 +131,15 @@ async function runAgentsSequentially(
   const finalState = readRunState(runDir);
   finalState.status = "complete";
   writeRunState(runDir, finalState);
+
+  // Notify the requester their report is ready (best-effort).
+  if (finalState.requester?.email) {
+    sendReportReadyEmail({
+      requesterEmail: finalState.requester.email,
+      runId,
+      target: { url: finalState.target_dapp.url, name: finalState.target_dapp.name },
+    }).catch((err) => console.error(`[orchestrator] report-ready email failed:`, err));
+  }
 }
 
 function countEvents(runDir: string, personaId: string): number {

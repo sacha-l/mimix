@@ -14,6 +14,8 @@ treasury-keypair*.json
 runs/*
 !runs/.gitkeep
 
+users/
+
 *.log
 .DS_Store
 .turbo/

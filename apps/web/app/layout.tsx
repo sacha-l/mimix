@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "Mimix",
-  description: "Autonomous Solana agent-personas that test your dApp.",
+  description: "Autonomous AI personas that stress-test your app.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -25,22 +25,26 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {hasLlmKey ? (
           <div className="bg-emerald-50 border-b border-emerald-200 text-xs text-emerald-900">
             <div className="max-w-6xl mx-auto px-6 py-2">
-              🤖 <strong>LLM mode active</strong> — personas are exploring with Claude Sonnet 4.5. Per-run token usage shown on the report.
+              🤖 <strong>LLM mode active</strong> — personas are exploring with Claude Opus 4.7. Per-run token usage shown on the report.
             </div>
           </div>
         ) : (
           <div className="bg-amber-50 border-b border-amber-200 text-xs text-amber-900">
             <div className="max-w-6xl mx-auto px-6 py-2">
-              🎭 <strong>Scripted demo mode</strong> — personas follow hand-authored action scripts on the reference dApp. Add{" "}
+              🎭 <strong>Scripted demo mode</strong> — personas follow hand-authored action scripts on the reference app. Add{" "}
               <code className="bg-amber-100 px-1 rounded">ANTHROPIC_API_KEY</code> to{" "}
-              <code className="bg-amber-100 px-1 rounded">.env.local</code> for real Claude-driven exploration on any dApp. The hosted version (coming soon) will bundle inference, curated personas, and reports as a service.
+              <code className="bg-amber-100 px-1 rounded">.env.local</code> for real Claude-driven exploration on any app. The hosted version (coming soon) will bundle inference, curated personas, and reports as a service.
             </div>
           </div>
         )}
 
         <main className="max-w-6xl mx-auto px-6 py-12">{children}</main>
         <footer className="max-w-6xl mx-auto px-6 py-12 text-xs text-slate-400">
-          Solana devnet · Real onchain transactions via forked Zerion CLI
+          Mimix by{" "}
+          <a href="https://github.com/sacha-l" className="underline hover:text-slate-600">Sacha Lansky</a>
+          {" · "}
+          <a href="https://x.com/sachalansky" className="underline hover:text-slate-600">@sachalansky</a>
+          {" · © 2026 Sacha Lansky · runs on Solana devnet via the forked Zerion CLI"}
         </footer>
       </body>
     </html>

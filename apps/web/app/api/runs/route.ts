@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { target_dapp_url, target_name, target_description, personas, payment_signature, payment_verified } = body;
+  const { target_dapp_url, target_name, target_description, personas, payment_signature, payment_verified, requester_email, goal } = body;
 
   if (!Array.isArray(personas) || personas.length === 0) {
     return NextResponse.json({ error: "personas required" }, { status: 400 });
@@ -35,6 +35,8 @@ export async function POST(req: NextRequest) {
     personas,
     paymentSignature: payment_signature || "debug-skip",
     paymentVerified: !!payment_verified,
+    requesterEmail: typeof requester_email === "string" ? requester_email : undefined,
+    goal: typeof goal === "string" ? goal : undefined,
   });
 
   return NextResponse.json({ run_id: result.runId });
