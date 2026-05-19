@@ -13,6 +13,7 @@ COPY packages/policy-engine/package.json packages/policy-engine/
 COPY packages/personas/package.json packages/personas/
 COPY services/orchestrator/package.json services/orchestrator/
 COPY services/agent-runtime/package.json services/agent-runtime/
+COPY services/mcp-server/package.json services/mcp-server/
 RUN pnpm install --frozen-lockfile
 
 FROM deps AS build
@@ -36,7 +37,7 @@ ENV NEXT_PUBLIC_DEFAULT_TARGET_URL=https://demo-target.vercel.app/?test=1
 COPY --from=build /app /app
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh \
- && mkdir -p /app/runs \
+ && mkdir -p /app/runs /app/users \
  && chown -R pwuser:pwuser /app
 USER pwuser
 EXPOSE 3000

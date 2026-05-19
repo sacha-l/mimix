@@ -29,15 +29,24 @@ export default function RunPage() {
   const [state, setState] = useState<RunState | null>(null);
   const [eventsByPersona, setEventsByPersona] = useState<Record<string, RunEvent[]>>({});
   const [done, setDone] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [connectionLost, setConnectionLost] = useState(false);
 
   useEffect(() => {
-    fetch(`/api/runs/${id}`).then((r) => r.json()).then(setState);
+    fetch(`/api/runs/${id}`)
+      .then((r) => {
+        if (!r.ok) throw new Error(`run not found (${r.status})`);
+        return r.json();
+      })
+      .then(setState)
+      .catch((e) => setError(e?.message || "failed to load run"));
   }, [id]);
 
   useEffect(() => {
     if (!id) return;
     const evtSource = new EventSource(`/api/runs/${id}/events`);
     evtSource.onmessage = (e) => {
+      setConnectionLost(false);
       try {
         const ev = JSON.parse(e.data);
         setEventsByPersona((prev) => ({
@@ -52,15 +61,30 @@ export default function RunPage() {
       fetch(`/api/runs/${id}`).then((r) => r.json()).then(setState);
     });
     evtSource.onerror = () => {
-      // SSE retries automatically; but if run is already done we can close
+      // Browser auto-retries the stream; flag it so the user knows the
+      // live feed may be stale until it reconnects.
+      setConnectionLost(true);
     };
     return () => evtSource.close();
   }, [id]);
 
+  if (error) {
+    return (
+      <div>
+        <p className="text-red-600 mb-2">Couldn&apos;t load this run: {error}</p>
+        <a href="/register" className="underline">Start over</a>
+      </div>
+    );
+  }
   if (!state) return <div>Loading…</div>;
 
   return (
     <div>
+      {connectionLost && !done && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-900 text-xs rounded-lg px-3 py-2 mb-4">
+          Live updates interrupted — reconnecting. Refresh the page if events stop arriving.
+        </div>
+      )}
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-2xl font-bold">Run {id}</h1>

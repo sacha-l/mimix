@@ -42,11 +42,26 @@ type RunData = {
 export default function ReportPage() {
   const { id } = useParams<{ id: string }>();
   const [run, setRun] = useState<RunData | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch(`/api/runs/${id}`).then((r) => r.json()).then(setRun);
+    fetch(`/api/runs/${id}`)
+      .then((r) => {
+        if (!r.ok) throw new Error(`report not found (${r.status})`);
+        return r.json();
+      })
+      .then(setRun)
+      .catch((e) => setError(e?.message || "failed to load report"));
   }, [id]);
 
+  if (error) {
+    return (
+      <div>
+        <p className="text-red-600 mb-2">Couldn&apos;t load this report: {error}</p>
+        <a href="/register" className="underline">Start over</a>
+      </div>
+    );
+  }
   if (!run) return <div>Loading…</div>;
 
   const fragments = run.report_fragments || [];

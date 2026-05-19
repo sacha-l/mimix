@@ -47,6 +47,9 @@ function readReportFragment(runDir: string, personaId: string): any | null {
 }
 
 export function createRun(input: CreateRunInput): CreateRunResult {
+  if (!input.personas.length) {
+    throw new Error("createRun: at least one persona is required");
+  }
   const runId = `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const runDir = join(ROOT, "runs", runId);
   mkdirSync(runDir, { recursive: true });
@@ -162,6 +165,9 @@ function spawnAgent(
   targetUrl: string,
   runDir: string,
 ): Promise<number> {
+  // Backstop timeout — a hung agent (stuck navigation, wedged LLM call)
+  // must not hang the whole run. Sits above the agent's own wall-clock cap.
+  const timeoutMs = Number(process.env.MIMIX_AGENT_TIMEOUT_MS) || 900_000;
   return new Promise((resolveExec) => {
     const agentMain = resolve(ROOT, "services/agent-runtime/src/main.ts");
     const tsx = resolve(ROOT, "node_modules/.bin/tsx");
@@ -179,6 +185,22 @@ function spawnAgent(
       stdio: ["ignore", "pipe", "pipe"],
     });
 
+    let settled = false;
+    const finish = (code: number) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolveExec(code);
+    };
+
+    const timer = setTimeout(() => {
+      console.error(
+        `[orchestrator] agent ${personaId} exceeded ${timeoutMs}ms — killing`,
+      );
+      proc.kill("SIGTERM");
+      setTimeout(() => proc.kill("SIGKILL"), 5_000);
+    }, timeoutMs);
+
     proc.stdout.on("data", (d) => {
       process.stderr.write(`[${personaId}/out] ${d.toString()}`);
     });
@@ -186,6 +208,10 @@ function spawnAgent(
       process.stderr.write(`[${personaId}/err] ${d.toString()}`);
     });
 
-    proc.on("close", (code) => resolveExec(code ?? 1));
+    proc.on("close", (code) => finish(code ?? 1));
+    proc.on("error", (err) => {
+      console.error(`[orchestrator] agent ${personaId} spawn error:`, err);
+      finish(1);
+    });
   });
 }
