@@ -1,7 +1,9 @@
 FROM mcr.microsoft.com/playwright:v1.49.1-noble AS base
 ENV PNPM_HOME=/pnpm
 ENV PATH=$PNPM_HOME:$PATH
-RUN corepack enable && corepack prepare pnpm@10.8.1 --activate
+# Install pnpm directly via npm — the corepack bundled in this image has
+# stale npm-registry signing keys and fails to verify pnpm downloads.
+RUN npm install -g pnpm@10.8.1
 
 FROM base AS deps
 WORKDIR /app
