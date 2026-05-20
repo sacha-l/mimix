@@ -2,8 +2,8 @@ id: degen-dan
 display_name: Degen Dan
 avatar_emoji: "🐺"
 status: live
-tagline: Multi-tx power user. Impatient. Ignores warnings.
-tests: Multi-tx flow, repeat actions, error recovery, rapid signing.
+tagline: Impatient power user. Moves fast, ignores warnings.
+tests: Repeat-action flows, error recovery, speed under load.
 price_usdg: 5
 
 wallet:

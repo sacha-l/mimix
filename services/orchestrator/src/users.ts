@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
+import { mkdirSync, readFileSync, existsSync } from "node:fs";
 import { dirname, resolve, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { writeFileAtomic } from "./fs-atomic";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = process.env.MIMIX_ROOT || resolve(__dirname, "../../..");
@@ -64,7 +65,7 @@ export function registerUser(input: {
         goal: input.goal,
         questionnaire: input.questionnaire,
       };
-  writeFileSync(userPath(input.email), JSON.stringify(record, null, 2));
+  writeFileAtomic(userPath(input.email), JSON.stringify(record, null, 2));
   return { firstTime: !existing };
 }
 
@@ -74,5 +75,5 @@ export function recordRunForUser(email: string): void {
   if (!existing) return;
   existing.run_count += 1;
   existing.last_seen = new Date().toISOString();
-  writeFileSync(userPath(email), JSON.stringify(existing, null, 2));
+  writeFileAtomic(userPath(email), JSON.stringify(existing, null, 2));
 }

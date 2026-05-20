@@ -1,12 +1,23 @@
 import { existsSync, statSync, openSync, readSync, closeSync } from "node:fs";
 import { resolve, join } from "node:path";
+import { verifyRunAccess } from "@mimix/orchestrator";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const ROOT = resolve(process.cwd(), "../..");
 
-export async function GET(_req: Request, { params }: { params: { id: string } }) {
+export async function GET(req: Request, { params }: { params: { id: string } }) {
+  // EventSource can't set headers, so the token must be a query param.
+  const token = new URL(req.url).searchParams.get("token");
+  const access = verifyRunAccess(params.id, token);
+  if (access === "not-found") {
+    return new Response("run not found", { status: 404 });
+  }
+  if (access !== "ok") {
+    return new Response("unauthorized", { status: 401 });
+  }
+
   const eventsFile = join(ROOT, "runs", params.id, "events.jsonl");
 
   const encoder = new TextEncoder();

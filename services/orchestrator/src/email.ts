@@ -65,6 +65,7 @@ export async function sendReportReadyEmail(input: {
   requesterEmail?: string;
   runId: string;
   target: { url: string; name: string };
+  accessToken?: string;
 }): Promise<void> {
   if (!input.requesterEmail) {
     console.warn("[email] no requester email — skipping report-ready email");
@@ -74,7 +75,8 @@ export async function sendReportReadyEmail(input: {
   if (!transport) return;
 
   const base = process.env.MIMIX_PUBLIC_URL || "http://localhost:3000";
-  const reportUrl = `${base.replace(/\/$/, "")}/report/${input.runId}`;
+  const tokenParam = input.accessToken ? `?token=${encodeURIComponent(input.accessToken)}` : "";
+  const reportUrl = `${base.replace(/\/$/, "")}/report/${input.runId}${tokenParam}`;
   const lines = [
     `Your Mimix report is ready.`,
     ``,

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
   Connection,
@@ -22,6 +22,38 @@ const ROOT = process.env.MIMIX_ROOT || resolve(process.cwd(), "../..");
 const FAUCET_USDG_AMOUNT = 100;
 const FAUCET_SOL_AMOUNT = 0.05;
 const USDG_DECIMALS = 6;
+
+// Per-pubkey daily cap so the faucet can't be drained in a loop.
+const FAUCET_DAILY_CAP = 3;
+const CLAIMS_FILE = `${ROOT}/faucet-claims.json`;
+
+type ClaimStore = Record<string, { date: string; count: number }>;
+
+function readClaims(): ClaimStore {
+  if (!existsSync(CLAIMS_FILE)) return {};
+  try {
+    return JSON.parse(readFileSync(CLAIMS_FILE, "utf8")) as ClaimStore;
+  } catch {
+    return {};
+  }
+}
+
+function faucetClaimsToday(pubkey: string): number {
+  const rec = readClaims()[pubkey];
+  const today = new Date().toISOString().slice(0, 10);
+  return rec && rec.date === today ? rec.count : 0;
+}
+
+function recordFaucetClaim(pubkey: string): void {
+  const store = readClaims();
+  const today = new Date().toISOString().slice(0, 10);
+  const rec = store[pubkey];
+  store[pubkey] =
+    rec && rec.date === today
+      ? { date: today, count: rec.count + 1 }
+      : { date: today, count: 1 };
+  writeFileSync(CLAIMS_FILE, JSON.stringify(store, null, 2));
+}
 
 function loadTreasury(): Keypair {
   const inline = process.env.TREASURY_KEYPAIR_JSON;
@@ -55,6 +87,13 @@ export async function POST(req: NextRequest) {
     recipient = new PublicKey(body.pubkey);
   } catch {
     return NextResponse.json({ error: "invalid_pubkey" }, { status: 400 });
+  }
+
+  if (faucetClaimsToday(body.pubkey) >= FAUCET_DAILY_CAP) {
+    return NextResponse.json(
+      { error: "faucet_rate_limited", reason: `max ${FAUCET_DAILY_CAP} claims per pubkey per day` },
+      { status: 429 },
+    );
   }
 
   const mintAddress = process.env.USDG_MINT;
@@ -104,6 +143,8 @@ export async function POST(req: NextRequest) {
       treasury,
       FAUCET_USDG_AMOUNT * 10 ** USDG_DECIMALS,
     );
+
+    recordFaucetClaim(body.pubkey);
 
     return NextResponse.json({
       ok: true,

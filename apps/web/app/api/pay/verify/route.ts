@@ -12,17 +12,25 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ verified: false, reason: "missing_signature" }, { status: 400 });
   }
 
-  const treasuryPubkey = process.env.TREASURY_PUBKEY || process.env.NEXT_PUBLIC_TREASURY_PUBKEY;
-  const usdgMint = process.env.USDG_MINT || process.env.NEXT_PUBLIC_USDG_MINT;
-  if (!treasuryPubkey || !usdgMint) {
+  // Prefer real USDC settlement (operator payout wallet + USDC mint) when
+  // configured; otherwise fall back to the devnet USDG demo flow.
+  const payoutOwner =
+    process.env.MIMIX_PAYOUT_ADDRESS ||
+    process.env.TREASURY_PUBKEY ||
+    process.env.NEXT_PUBLIC_TREASURY_PUBKEY;
+  const paymentMint =
+    process.env.USDC_MINT || process.env.USDG_MINT || process.env.NEXT_PUBLIC_USDG_MINT;
+  if (!payoutOwner || !paymentMint) {
     return NextResponse.json(
-      { verified: false, reason: "treasury_not_configured" },
+      { verified: false, reason: "payment_not_configured" },
       { status: 500 },
     );
   }
 
   const conn = new Connection(
-    process.env.SOLANA_RPC_URL || clusterApiUrl("devnet"),
+    process.env.PAYMENT_RPC_URL ||
+      process.env.SOLANA_RPC_URL ||
+      clusterApiUrl("devnet"),
     "confirmed",
   );
 
@@ -45,7 +53,7 @@ export async function POST(req: NextRequest) {
         try {
           const destAccount = await conn.getParsedAccountInfo(new PublicKey(dest));
           const parsed: any = destAccount.value?.data;
-          if (parsed?.parsed?.info?.owner === treasuryPubkey && parsed?.parsed?.info?.mint === usdgMint) {
+          if (parsed?.parsed?.info?.owner === payoutOwner && parsed?.parsed?.info?.mint === paymentMint) {
             const amount = info.tokenAmount?.uiAmount ?? parseFloat(info.amount) / 1e6;
             if (typeof expected_amount_usdg === "number" && amount < expected_amount_usdg) {
               return NextResponse.json({ verified: false, reason: "amount_too_low", amount });

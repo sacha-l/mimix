@@ -15,6 +15,8 @@ runs/*
 !runs/.gitkeep
 
 users/
+payments/
+faucet-claims.json
 
 *.log
 .DS_Store

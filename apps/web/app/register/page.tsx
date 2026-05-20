@@ -13,6 +13,7 @@ export default function RegisterPage() {
   const [url, setUrl] = useState(DEMO_TARGET_URL);
   const [name, setName] = useState("DemoPay");
   const [description, setDescription] = useState("A SOL-payment demo app.");
+  const [targetKind, setTargetKind] = useState<"web" | "solana">("web");
   const [email, setEmail] = useState("");
   const [goal, setGoal] = useState("");
   const [appType, setAppType] = useState(APP_TYPES[0]);
@@ -28,6 +29,7 @@ export default function RegisterPage() {
         if (parsed.url) setUrl(parsed.url);
         if (parsed.name) setName(parsed.name);
         if (parsed.description) setDescription(parsed.description);
+        if (parsed.targetKind === "web" || parsed.targetKind === "solana") setTargetKind(parsed.targetKind);
         if (parsed.email) setEmail(parsed.email);
         if (parsed.goal) setGoal(parsed.goal);
       } catch {}
@@ -53,7 +55,7 @@ export default function RegisterPage() {
     }
     localStorage.setItem(
       "mimix.draft_run",
-      JSON.stringify({ url, name, description, email, goal }),
+      JSON.stringify({ url, name, description, targetKind, email, goal }),
     );
     router.push("/personas");
   };
@@ -64,6 +66,20 @@ export default function RegisterPage() {
       <p className="text-slate-600 mb-8">Any app URL. For the demo, point at the hosted DemoPay.</p>
 
       <form onSubmit={handleContinue} className="space-y-5">
+        <div>
+          <label className="block text-sm font-medium mb-1">What are you testing?</label>
+          <select
+            value={targetKind}
+            onChange={(e) => setTargetKind(e.target.value as "web" | "solana")}
+            className="w-full border border-slate-300 rounded-lg px-3 py-2"
+          >
+            <option value="web">A web app</option>
+            <option value="solana">A Solana dApp (adds a funded test wallet)</option>
+          </select>
+          <p className="text-xs text-slate-500 mt-1">
+            Web apps are browsed as-is. Solana dApps get a funded devnet wallet and a real onchain leg.
+          </p>
+        </div>
         <div>
           <label className="block text-sm font-medium mb-1">App URL</label>
           <input
