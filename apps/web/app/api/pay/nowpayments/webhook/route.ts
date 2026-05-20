@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, ignored: status });
   }
 
-  const invoice = getInvoice(orderId);
+  const invoice = await getInvoice(orderId);
   if (!invoice) {
     return NextResponse.json({ error: "unknown_invoice" }, { status: 404 });
   }
@@ -69,19 +69,19 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const result = createRun({
+    const result = await createRun({
       ...invoice.run_input,
       paymentSignature: `nowpay:${parsed.payment_id || orderId}`,
       paymentVerified: true,
     });
-    updateInvoice(orderId, {
+    await updateInvoice(orderId, {
       status: "paid",
       run_id: result.runId,
       access_token: result.accessToken,
     });
     return NextResponse.json({ ok: true, run_id: result.runId });
   } catch (err) {
-    updateInvoice(orderId, { status: "failed" });
+    await updateInvoice(orderId, { status: "failed" });
     return NextResponse.json(
       { error: "create_run_failed", detail: (err as Error).message },
       { status: 500 },

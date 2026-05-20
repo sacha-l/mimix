@@ -14,7 +14,6 @@ export default function RegisterPage() {
   const [name, setName] = useState("DemoPay");
   const [description, setDescription] = useState("A SOL-payment demo app.");
   const [targetKind, setTargetKind] = useState<"web" | "solana">("web");
-  const [email, setEmail] = useState("");
   const [goal, setGoal] = useState("");
   const [appType, setAppType] = useState(APP_TYPES[0]);
   const [role, setRole] = useState(ROLES[0]);
@@ -30,7 +29,6 @@ export default function RegisterPage() {
         if (parsed.name) setName(parsed.name);
         if (parsed.description) setDescription(parsed.description);
         if (parsed.targetKind === "web" || parsed.targetKind === "solana") setTargetKind(parsed.targetKind);
-        if (parsed.email) setEmail(parsed.email);
         if (parsed.goal) setGoal(parsed.goal);
       } catch {}
     }
@@ -39,23 +37,22 @@ export default function RegisterPage() {
   const handleContinue = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
-    // Best-effort registration — never block the run flow on the user store.
+    // Best-effort: save goal + questionnaire onto the signed-in user's row.
     try {
       await fetch("/api/users/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          email,
           goal,
           questionnaire: { app_type: appType, role, heard_from: heardFrom },
         }),
       });
     } catch (err) {
-      console.warn("user registration failed (continuing anyway):", err);
+      console.warn("user profile update failed (continuing anyway):", err);
     }
     localStorage.setItem(
       "mimix.draft_run",
-      JSON.stringify({ url, name, description, targetKind, email, goal }),
+      JSON.stringify({ url, name, description, targetKind, goal }),
     );
     router.push("/personas");
   };
@@ -121,18 +118,6 @@ export default function RegisterPage() {
 
         <hr className="border-slate-200" />
 
-        <div>
-          <label className="block text-sm font-medium mb-1">Your email</label>
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            placeholder="you@example.com"
-            className="w-full border border-slate-300 rounded-lg px-3 py-2"
-          />
-          <p className="text-xs text-slate-500 mt-1">We email you when your report is ready.</p>
-        </div>
         <div>
           <label className="block text-sm font-medium mb-1">What do you want to learn from this test?</label>
           <textarea

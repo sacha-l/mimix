@@ -14,21 +14,28 @@ import {
   ListToolsRequestSchema,
   CallToolRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
-import { createRun } from "@mimix/orchestrator";
+import { createRun, prisma } from "@mimix/orchestrator";
 import { listLivePersonas } from "@mimix/personas";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = process.env.MIMIX_ROOT || resolve(__dirname, "../../..");
 const DEFAULT_TARGET = "https://demo-target.vercel.app/?test=1";
 
-function readRun(runId: string): any | null {
-  const p = join(ROOT, "runs", runId, "run.json");
-  if (!existsSync(p)) return null;
-  try {
-    return JSON.parse(readFileSync(p, "utf8"));
-  } catch {
-    return null;
-  }
+async function readRun(runId: string): Promise<any | null> {
+  const run = await prisma.run.findUnique({ where: { id: runId } });
+  if (!run) return null;
+  return {
+    id: run.id,
+    status: run.status,
+    target_dapp: {
+      url: run.targetUrl,
+      name: run.targetName,
+      description: run.targetDescription,
+    },
+    target_kind: run.targetKind,
+    personas: run.personas,
+    agents: run.agents,
+  };
 }
 
 function readFragment(runId: string, persona: string): any | null {
@@ -119,7 +126,30 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
             ? "web"
             : "solana";
 
-    const { runId, accessToken } = createRun({
+    // MCP runs are attributed to MCP_OWNER_EMAIL (the operator). Without it
+    // there's no User to own the run.
+    const ownerEmail = process.env.MCP_OWNER_EMAIL;
+    if (!ownerEmail) {
+      return {
+        content: [{ type: "text", text: "MCP_OWNER_EMAIL is not set — can't attribute the run." }],
+        isError: true,
+      };
+    }
+    const owner = await prisma.user.findUnique({ where: { email: ownerEmail } });
+    if (!owner) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `No user found with email ${ownerEmail}. Sign in via the web app first to provision the account.`,
+          },
+        ],
+        isError: true,
+      };
+    }
+
+    const { runId, accessToken } = await createRun({
+      ownerId: owner.id,
       targetUrl,
       targetName: "MCP run",
       targetDescription: "Started via the Mimix MCP server.",
@@ -146,7 +176,7 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
 
   if (name === "get_run_status") {
     const runId = args.run_id as string;
-    const run = readRun(runId);
+    const run = await readRun(runId);
     if (!run) {
       return { content: [{ type: "text", text: `Run ${runId} not found.` }], isError: true };
     }
@@ -159,7 +189,7 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
 
   if (name === "get_report") {
     const runId = args.run_id as string;
-    const run = readRun(runId);
+    const run = await readRun(runId);
     if (!run) {
       return { content: [{ type: "text", text: `Run ${runId} not found.` }], isError: true };
     }

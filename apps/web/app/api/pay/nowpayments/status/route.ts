@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
   if (!id) {
     return NextResponse.json({ error: "missing_invoice_id" }, { status: 400 });
   }
-  const inv = getInvoice(id);
+  const inv = await getInvoice(id);
   if (!inv) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }

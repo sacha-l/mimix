@@ -1,23 +1,36 @@
 import { spawn } from "node:child_process";
-import { mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
+import { mkdirSync, readFileSync, existsSync } from "node:fs";
 import { dirname, resolve, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomBytes } from "node:crypto";
 import type { RunState, TargetKind } from "@mimix/persona-types";
-import { recordRunForUser } from "./users";
-import { sendRunStartedEmail, sendReportReadyEmail } from "./email";
-import { isSignatureConsumed, consumeSignature } from "./payments";
-import { writeFileAtomic } from "./fs-atomic";
 
-export { registerUser, getUser, recordRunForUser } from "./users";
-export type { UserRecord, Questionnaire } from "./users";
+import { prisma } from "./prisma";
+import {
+  sendRunStartedEmail,
+  sendReportReadyEmail,
+} from "./email";
+import { isSignatureConsumed, consumeSignature } from "./payments";
+
+// Re-exports
+export { prisma } from "./prisma";
 export { saveInvoice, getInvoice, updateInvoice } from "./invoices";
 export type { InvoiceRecord, InvoiceRunInput } from "./invoices";
+export { sendSignupNotificationEmail, sendUserApprovedEmail } from "./email";
+export { isSignatureConsumed, consumeSignature } from "./payments";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = process.env.MIMIX_ROOT || resolve(__dirname, "../../..");
+const DATA_ROOT = process.env.MIMIX_DATA_ROOT || ROOT;
+
+/**
+ * Run metadata lives in Postgres (Run table). Run *artifacts* (events.jsonl,
+ * screenshots, report fragments) live on disk under DATA_ROOT/runs/{id}/ —
+ * they're large or append-only so the DB isn't the right home.
+ */
 
 export type CreateRunInput = {
+  ownerId: string;
   targetUrl: string;
   targetName: string;
   targetDescription: string;
@@ -25,111 +38,89 @@ export type CreateRunInput = {
   personas: string[];
   paymentSignature: string;
   paymentVerified: boolean;
-  requesterEmail?: string;
   goal?: string;
 };
 
 export type CreateRunResult = {
   runId: string;
   runDir: string;
-  /** Token the client must present to read this run. Returned exactly once. */
   accessToken: string;
 };
 
 /**
- * Validate that `providedToken` matches the run's stored access_token.
- * Legacy runs (created before tokens existed) are accessible without one.
+ * Verify access to a run. Owners (signed-in matching userId) skip the
+ * token check; an unauthenticated viewer needs the share-link token.
+ * Legacy file-system runs (no DB row) are no longer readable here.
  */
-export function verifyRunAccess(
+export async function verifyRunAccess(
   runId: string,
   providedToken: string | null,
-): "ok" | "missing" | "invalid" | "not-found" {
-  const runFile = join(ROOT, "runs", runId, "run.json");
-  if (!existsSync(runFile)) return "not-found";
-  try {
-    const state = JSON.parse(readFileSync(runFile, "utf8")) as RunState;
-    if (!state.access_token) return "ok";
-    if (!providedToken) return "missing";
-    return providedToken === state.access_token ? "ok" : "invalid";
-  } catch {
-    return "not-found";
-  }
+  userId: string | null,
+): Promise<"ok" | "missing" | "invalid" | "not-found"> {
+  const run = await prisma.run.findUnique({
+    where: { id: runId },
+    select: { ownerId: true, accessToken: true },
+  });
+  if (!run) return "not-found";
+  if (userId && run.ownerId === userId) return "ok";
+  if (!providedToken) return "missing";
+  return providedToken === run.accessToken ? "ok" : "invalid";
 }
 
-function readRunState(runDir: string): RunState {
-  return JSON.parse(readFileSync(join(runDir, "run.json"), "utf8"));
-}
-
-function writeRunState(runDir: string, state: RunState): void {
-  writeFileAtomic(join(runDir, "run.json"), JSON.stringify(state, null, 2));
-}
-
-function readReportFragment(runDir: string, personaId: string): any | null {
-  const p = join(runDir, `report-${personaId}.json`);
-  if (!existsSync(p)) return null;
-  try {
-    return JSON.parse(readFileSync(p, "utf8"));
-  } catch {
-    return null;
-  }
-}
-
-export function createRun(input: CreateRunInput): CreateRunResult {
+export async function createRun(input: CreateRunInput): Promise<CreateRunResult> {
   if (!input.personas.length) {
     throw new Error("createRun: at least one persona is required");
   }
 
-  // Payment-replay guard — a real payment signature unlocks one run only.
+  // Payment-replay guard.
   const sig = input.paymentSignature;
   const isRealPayment =
     input.paymentVerified && !!sig && sig !== "debug-skip" && sig !== "mcp";
-  if (isRealPayment && isSignatureConsumed(sig)) {
+  if (isRealPayment && (await isSignatureConsumed(sig))) {
     throw new Error("createRun: payment signature already used for another run");
   }
 
   const runId = `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  const runDir = join(ROOT, "runs", runId);
+  const runDir = join(DATA_ROOT, "runs", runId);
   mkdirSync(runDir, { recursive: true });
 
   const targetKind: TargetKind = input.targetKind || "web";
   const accessToken = randomBytes(32).toString("hex");
 
-  const state: RunState = {
-    id: runId,
-    created_at: new Date().toISOString(),
-    target_dapp: {
-      url: input.targetUrl,
-      name: input.targetName,
-      description: input.targetDescription,
+  // Initial agents map — all pending.
+  const agents = Object.fromEntries(
+    input.personas.map((p) => [p, { status: "pending", events_count: 0 }]),
+  );
+
+  await prisma.run.create({
+    data: {
+      id: runId,
+      ownerId: input.ownerId,
+      targetUrl: input.targetUrl,
+      targetName: input.targetName,
+      targetDescription: input.targetDescription,
+      targetKind,
+      personas: input.personas,
+      goal: input.goal,
+      status: "running",
+      agents: agents as any,
+      accessToken,
+      paymentSignature: sig || null,
+      paymentVerified: input.paymentVerified,
     },
-    target_kind: targetKind,
-    access_token: accessToken,
-    personas: input.personas,
-    payment: {
-      amount_usdg: input.personas.length * 5,
-      tx_signature: input.paymentSignature,
-      verified: input.paymentVerified,
-    },
-    status: "running",
-    agents: Object.fromEntries(
-      input.personas.map((p) => [p, { status: "pending" as const, events_count: 0 }]),
-    ),
-  };
-  if (input.requesterEmail) {
-    state.requester = { email: input.requesterEmail, goal: input.goal };
-  }
-  writeRunState(runDir, state);
+  });
 
   if (isRealPayment) {
-    consumeSignature(sig, runId);
+    await consumeSignature(sig, runId);
   }
 
-  // Notify the operator and bump the user's run counter (best-effort).
-  if (input.requesterEmail) {
-    recordRunForUser(input.requesterEmail);
-  }
+  // Operator notification (best-effort).
+  const requester = await prisma.user.findUnique({
+    where: { id: input.ownerId },
+    select: { email: true },
+  });
   sendRunStartedEmail({
-    requesterEmail: input.requesterEmail,
+    requesterEmail: requester?.email || undefined,
     target: { url: input.targetUrl, name: input.targetName },
     personas: input.personas,
     goal: input.goal,
@@ -137,14 +128,17 @@ export function createRun(input: CreateRunInput): CreateRunResult {
   }).catch((err) => console.error(`[orchestrator] run-started email failed:`, err));
 
   // Fire-and-forget — sequential agent execution
-  runAgentsSequentially(runId, runDir, input.personas, input.targetUrl, targetKind, input.goal).catch((err) => {
-    console.error(`[orchestrator] run ${runId} failed:`, err);
-    try {
-      const s = readRunState(runDir);
-      s.status = "failed";
-      writeRunState(runDir, s);
-    } catch {}
-  });
+  runAgentsSequentially(runId, runDir, input.personas, input.targetUrl, targetKind, input.goal).catch(
+    async (err) => {
+      console.error(`[orchestrator] run ${runId} failed:`, err);
+      try {
+        await prisma.run.update({
+          where: { id: runId },
+          data: { status: "failed", completedAt: new Date() },
+        });
+      } catch {}
+    },
+  );
 
   return { runId, runDir, accessToken };
 }
@@ -158,39 +152,64 @@ async function runAgentsSequentially(
   goal?: string,
 ): Promise<void> {
   for (const personaId of personas) {
-    let state = readRunState(runDir);
-    state.agents[personaId] = { status: "running", events_count: 0 };
-    writeRunState(runDir, state);
+    await updateAgent(runId, personaId, { status: "running", events_count: 0 });
 
     await spawnAgent(runId, personaId, targetUrl, runDir, targetKind, goal);
 
-    // Read report fragment to determine outcome
     const fragment = readReportFragment(runDir, personaId);
     const outcome: "complete" | "abandoned" | "capped" | "failed" =
-      fragment?.outcome === "completed" ? "complete"
-        : fragment?.outcome === "abandoned" ? "abandoned"
-          : fragment?.capped ? "capped"
+      fragment?.outcome === "completed"
+        ? "complete"
+        : fragment?.outcome === "abandoned"
+          ? "abandoned"
+          : fragment?.capped
+            ? "capped"
             : "failed";
 
-    state = readRunState(runDir);
-    const eventsCount = countEvents(runDir, personaId);
-    state.agents[personaId] = { status: outcome, events_count: eventsCount };
-    writeRunState(runDir, state);
+    await updateAgent(runId, personaId, {
+      status: outcome,
+      events_count: countEvents(runDir, personaId),
+    });
   }
 
-  // All agents done
-  const finalState = readRunState(runDir);
-  finalState.status = "complete";
-  writeRunState(runDir, finalState);
+  // All agents done.
+  const finalRun = await prisma.run.update({
+    where: { id: runId },
+    data: { status: "complete", completedAt: new Date() },
+    include: { owner: true },
+  });
 
-  // Notify the requester their report is ready (best-effort).
-  if (finalState.requester?.email) {
+  // Report-ready email to the requester (best-effort).
+  if (finalRun.owner?.email) {
     sendReportReadyEmail({
-      requesterEmail: finalState.requester.email,
+      requesterEmail: finalRun.owner.email,
       runId,
-      target: { url: finalState.target_dapp.url, name: finalState.target_dapp.name },
-      accessToken: finalState.access_token,
-    }).catch((err) => console.error(`[orchestrator] report-ready email failed:`, err));
+      target: { url: finalRun.targetUrl, name: finalRun.targetName },
+      accessToken: finalRun.accessToken,
+    }).catch((err) =>
+      console.error(`[orchestrator] report-ready email failed:`, err),
+    );
+  }
+}
+
+async function updateAgent(
+  runId: string,
+  personaId: string,
+  patch: { status: string; events_count: number },
+): Promise<void> {
+  const run = await prisma.run.findUnique({ where: { id: runId }, select: { agents: true } });
+  const agents = ((run?.agents as any) || {}) as Record<string, { status: string; events_count: number }>;
+  agents[personaId] = patch;
+  await prisma.run.update({ where: { id: runId }, data: { agents: agents as any } });
+}
+
+function readReportFragment(runDir: string, personaId: string): any | null {
+  const p = join(runDir, `report-${personaId}.json`);
+  if (!existsSync(p)) return null;
+  try {
+    return JSON.parse(readFileSync(p, "utf8"));
+  } catch {
+    return null;
   }
 }
 
@@ -267,4 +286,58 @@ function spawnAgent(
       finish(1);
     });
   });
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Wire-shape helpers (API response building)
+// ─────────────────────────────────────────────────────────────────────
+
+/**
+ * Build the API-shape RunState that the web UI consumes.
+ * Reads metadata from Postgres + report fragments from the runs/{id}/ dir.
+ */
+export async function getRunStateForApi(runId: string): Promise<
+  | (RunState & { report_fragments: any[]; access_token?: string })
+  | null
+> {
+  const run = await prisma.run.findUnique({ where: { id: runId } });
+  if (!run) return null;
+  const runDir = join(DATA_ROOT, "runs", runId);
+
+  const fragments: any[] = [];
+  for (const pid of run.personas) {
+    const fp = join(runDir, `report-${pid}.json`);
+    if (existsSync(fp)) {
+      try {
+        fragments.push(JSON.parse(readFileSync(fp, "utf8")));
+      } catch {}
+    }
+  }
+
+  const state: RunState & { report_fragments: any[]; access_token?: string } = {
+    id: run.id,
+    created_at: run.createdAt.toISOString(),
+    target_dapp: {
+      url: run.targetUrl,
+      name: run.targetName,
+      description: run.targetDescription,
+    },
+    target_kind: run.targetKind as TargetKind,
+    personas: run.personas,
+    // payment.amount_usdg is legacy naming — values are USDC now.
+    payment: {
+      amount_usdg: run.personas.length * 9,
+      tx_signature: run.paymentSignature || "",
+      verified: run.paymentVerified,
+    },
+    status: run.status as RunState["status"],
+    agents: (run.agents as any) || {},
+    report_fragments: fragments,
+  };
+  return state;
+}
+
+/** Returns events.jsonl path for the SSE route. */
+export function runEventsFile(runId: string): string {
+  return join(DATA_ROOT, "runs", runId, "events.jsonl");
 }

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomBytes } from "node:crypto";
 import { saveInvoice } from "@mimix/orchestrator";
+import { auth } from "../../../../../auth";
+import { prisma } from "../../../../../lib/prisma";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -13,6 +15,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "nowpayments_not_configured" }, { status: 500 });
   }
 
+  const session = await auth();
+  if (!session?.user?.email) {
+    return NextResponse.json({ error: "not_authenticated" }, { status: 401 });
+  }
+  const owner = await prisma.user.findUnique({ where: { email: session.user.email } });
+  if (!owner) {
+    return NextResponse.json({ error: "user_not_found" }, { status: 401 });
+  }
+  if (owner.status !== "APPROVED") {
+    return NextResponse.json({ error: "account_pending_approval" }, { status: 403 });
+  }
+
   const body = await req.json();
   const {
     target_dapp_url,
@@ -20,7 +34,6 @@ export async function POST(req: NextRequest) {
     target_description,
     target_kind,
     personas,
-    requester_email,
     goal,
   } = body;
 
@@ -40,20 +53,19 @@ export async function POST(req: NextRequest) {
     process.env.MIMIX_PUBLIC_URL || `https://${req.headers.get("host") || "localhost:3000"}`;
 
   // Persist pending invoice so the webhook can look it up when payment lands.
-  saveInvoice({
+  await saveInvoice({
     invoice_id: orderId,
-    created_at: new Date().toISOString(),
     amount_usd: amount,
     run_input: {
+      ownerId: owner.id,
       targetUrl: target_dapp_url,
       targetName: target_name || "Untitled",
       targetDescription: target_description || "",
       targetKind: target_kind === "solana" ? "solana" : "web",
       personas,
-      requesterEmail: typeof requester_email === "string" ? requester_email : undefined,
+      requesterEmail: owner.email,
       goal: typeof goal === "string" ? goal : undefined,
     },
-    status: "pending",
   });
 
   // Create the hosted invoice on NowPayments. The payer picks chain + USDC

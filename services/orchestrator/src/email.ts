@@ -61,6 +61,65 @@ export async function sendRunStartedEmail(input: {
   }
 }
 
+export async function sendSignupNotificationEmail(input: {
+  newUserEmail: string;
+  newUserName?: string;
+}): Promise<void> {
+  const operator = process.env.MIMIX_OPERATOR_EMAIL;
+  if (!operator) {
+    console.warn("[email] MIMIX_OPERATOR_EMAIL unset — skipping signup email");
+    return;
+  }
+  const transport = getTransport();
+  if (!transport) return;
+
+  const base = process.env.MIMIX_PUBLIC_URL || "http://localhost:3000";
+  const text = [
+    `A new Mimix sign-up just landed in the waitlist.`,
+    ``,
+    `Name:  ${input.newUserName || "(none)"}`,
+    `Email: ${input.newUserEmail}`,
+    ``,
+    `Approve at: ${base.replace(/\/$/, "")}/admin/users`,
+  ].join("\n");
+  try {
+    await transport.sendMail({
+      from: fromAddress(),
+      to: operator,
+      subject: `Mimix sign-up — ${input.newUserEmail}`,
+      text,
+    });
+  } catch (err) {
+    console.error("[email] signup notification send failed:", err);
+  }
+}
+
+export async function sendUserApprovedEmail(input: {
+  to: string;
+}): Promise<void> {
+  if (!input.to) return;
+  const transport = getTransport();
+  if (!transport) return;
+  const base = process.env.MIMIX_PUBLIC_URL || "http://localhost:3000";
+  const text = [
+    `Your Mimix account is approved.`,
+    ``,
+    `Sign in: ${base.replace(/\/$/, "")}/signin`,
+    ``,
+    `— Mimix`,
+  ].join("\n");
+  try {
+    await transport.sendMail({
+      from: fromAddress(),
+      to: input.to,
+      subject: `Welcome to Mimix — your account is approved`,
+      text,
+    });
+  } catch (err) {
+    console.error("[email] approval email send failed:", err);
+  }
+}
+
 export async function sendReportReadyEmail(input: {
   requesterEmail?: string;
   runId: string;

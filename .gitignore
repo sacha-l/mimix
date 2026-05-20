@@ -14,9 +14,12 @@ treasury-keypair*.json
 runs/*
 !runs/.gitkeep
 
-users/
-payments/
-faucet-claims.json
+# Data-root subtrees (file-system run artifacts, payment counters, faucet
+# claim log). Anchored with a leading slash so we don't accidentally
+# ignore files like `apps/web/app/api/users` or `apps/web/app/admin/users`.
+/users/
+/payments/
+/faucet-claims.json
 
 *.log
 .DS_Store

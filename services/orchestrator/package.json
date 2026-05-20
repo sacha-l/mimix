@@ -7,6 +7,7 @@
   "dependencies": {
     "@mimix/persona-types": "workspace:*",
     "@mimix/personas": "workspace:*",
+    "@prisma/client": "^6.19.3",
     "nodemailer": "^6.9.16"
   },
   "devDependencies": {

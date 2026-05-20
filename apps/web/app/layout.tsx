@@ -1,23 +1,37 @@
 import "./globals.css";
 import type { Metadata } from "next";
+import { auth, signOut } from "../auth";
 
 export const metadata: Metadata = {
   title: "Mimix",
   description: "Autonomous AI personas that stress-test your app.",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const hasLlmKey = !!process.env.ANTHROPIC_API_KEY && process.env.MIMIX_FAKE_LLM !== "1";
+  const session = await auth();
+  const isAdmin = !!session?.user?.email && session.user.email === process.env.ADMIN_EMAIL;
+
   return (
     <html lang="en">
       <body className="bg-slate-50 text-slate-900 antialiased">
         <header className="border-b border-slate-200 bg-white">
           <div className="max-w-6xl mx-auto px-6 py-4 flex justify-between items-center">
             <a href="/" className="font-bold text-lg">Mimix</a>
-            <nav className="text-sm text-slate-600 space-x-4">
-              <a href="/personas" className="hover:text-slate-900">Personas</a>
+            <nav className="text-sm text-slate-600 space-x-4 flex items-center">
               <a href="/pricing" className="hover:text-slate-900">Pricing</a>
-              <a href="/register" className="hover:text-slate-900">Start a run</a>
+              {session ? (
+                <>
+                  <a href="/dashboard" className="hover:text-slate-900">Dashboard</a>
+                  {isAdmin && <a href="/admin/users" className="hover:text-slate-900">Admin</a>}
+                  <span className="text-slate-400 text-xs">{session.user?.email}</span>
+                  <form action={async () => { "use server"; await signOut({ redirectTo: "/" }); }}>
+                    <button className="hover:text-slate-900">Sign out</button>
+                  </form>
+                </>
+              ) : (
+                <a href="/signin" className="hover:text-slate-900">Sign in</a>
+              )}
             </nav>
           </div>
         </header>

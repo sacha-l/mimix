@@ -9,22 +9,23 @@
 
 ## Current state
 
-Mimix tests **any web app** (and, as a target kind, Solana dApps). A visitor
-registers an app URL, picks "Web app" or "Solana dApp", gives an email + goal +
-a short questionnaire, picks personas, pays (or skips in debug mode), watches a
-live run, and gets a report. The orchestrator spawns one agent process per
-persona; each agent drives a real headless browser with Playwright and decides
-actions with Claude (`MIMIX_MODEL`, default Sonnet 4.6; or hand-authored scripts
-with no API key). **Web** runs browse the app as-is — no wallet. **Solana** runs
-add a funded devnet Zerion wallet and a real onchain leg. For web runs the
-journey is the customer's stated goal; for Solana runs it's the persona's
-crypto journey. Runs/users stored as JSON files (`runs/`, `users/`). SMTP email
-notifies operator on run-start and requester on report-ready. An MCP server
-exposes `run_mimix` / `get_run_status` / `get_report`. Run reads (HTTP + SSE)
-are gated by a per-run access token returned once at creation. Payments verify
-a USDC transfer to the operator wallet (replay-guarded); pricing is $9 Standard / $29
-Pro. 3 live personas; 5 beta personas are card-only stubs. Launch work lives on
-the `staging` branch.
+Mimix is a **closed-beta SaaS with real accounts**. Sign in with Google or an
+email magic-link (Auth.js v5 + Postgres via Prisma); new sign-ups land on a
+**waitlist** until the operator approves them at `/admin/users`. Approved
+users register an app URL on `/register` (Web app or Solana dApp), pick
+personas, pay USDC via NowPayments (hosted checkout across Solana + 5 EVM
+chains), and watch a live run. Each user's runs and reports list on
+`/dashboard`, gated by ownership (signed-in user matches `Run.ownerId`) with
+a per-run share-link token as a fallback for unauthenticated viewers. The
+orchestrator spawns one agent process per persona; each agent drives a real
+headless browser with Claude (`MIMIX_MODEL`, default Sonnet 4.6) and writes
+persona-voice observations. **Run metadata lives in Postgres**;
+`events.jsonl`, screenshots, and report fragments live on disk under
+`MIMIX_DATA_ROOT` (set to `/data` with a Railway Volume in prod). SMTP
+notifications fire on signup → operator, run-start → operator, report-ready
+→ requester, approval → newly-approved user. The MCP server (`run_mimix`)
+is attributed via `MCP_OWNER_EMAIL`. 3 live personas; 5 beta personas are
+card-only stubs.
 
 ---
 
@@ -36,6 +37,11 @@ _Empty — all known correctness/abuse-risk items are shipped. Next gaps land he
 
 ### P2 — product / roadmap
 
+- **Rate-limit sign-ups.** `/api/auth/*` is open (Auth.js standard); a
+  scripted attacker can spam new users into the waitlist. Add a per-IP
+  daily cap (file or DB counter).
+- **Magic-link branding.** Auth.js sends a plain-text "Sign in to Mimix"
+  email by default. Add a branded HTML template.
 - **Tier → model wiring.** `MIMIX_MODEL` is global; the Pro tier should
   per-run select Opus 4.7 while Standard uses Sonnet 4.6. Needs a `tier` field
   on the run, threaded register → pay → `createRun` → agent env.
@@ -67,6 +73,17 @@ _Empty — all known correctness/abuse-risk items are shipped. Next gaps land he
 
 ## Recently shipped
 
+- **Production accounts (Auth.js v5 + Postgres).** Google OAuth + email
+  magic-link sign-in. Users land on the waitlist; the operator approves them
+  at `/admin/users` (gated by `ADMIN_EMAIL`). New `/dashboard` lists the
+  signed-in user's runs and links to their reports. Run reads check ownership
+  (session user = `Run.ownerId`) before falling back to the share-link token.
+  Run metadata moved from `run.json` to a Postgres `Run` table; invoices and
+  consumed payment signatures also in Postgres. Run artifacts (events.jsonl,
+  screenshots, report fragments) live under `MIMIX_DATA_ROOT` — set to `/data`
+  on Railway with a Volume mounted there so they survive redeploys. The old
+  `users/{hash}.json` file store is deleted; user identity is now Auth.js +
+  the User table. `prisma migrate deploy` runs at container start.
 - **NowPayments USDC checkout (v1 payments rail).** Hosted single-checkout
   accepting **USDC on Solana, Ethereum, Base, Arbitrum, Optimism, and Polygon**
   via the payer's wallet of choice (Phantom, MetaMask, Coinbase Wallet,

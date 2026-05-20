@@ -1,12 +1,10 @@
 import { NextResponse } from "next/server";
-import { readFileSync, existsSync } from "node:fs";
-import { resolve, join } from "node:path";
-import { verifyRunAccess } from "@mimix/orchestrator";
+import { verifyRunAccess, getRunStateForApi } from "@mimix/orchestrator";
+import { auth } from "../../../../auth";
+import { prisma } from "../../../../lib/prisma";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-const ROOT = resolve(process.cwd(), "../..");
 
 type Fragment = {
   persona: string;
@@ -21,21 +19,7 @@ type Fragment = {
   turn_budget?: number;
 };
 
-function countEventsByType(runDir: string): Record<string, number> {
-  const f = join(runDir, "events.jsonl");
-  if (!existsSync(f)) return {};
-  const counts: Record<string, number> = {};
-  for (const line of readFileSync(f, "utf8").split("\n")) {
-    if (!line) continue;
-    try {
-      const ev = JSON.parse(line);
-      counts[ev.type] = (counts[ev.type] || 0) + 1;
-    } catch {}
-  }
-  return counts;
-}
-
-function buildAggregate(fragments: Fragment[], eventCounts: Record<string, number>) {
+function buildAggregate(fragments: Fragment[]) {
   const total = fragments.length;
   const completed = fragments.filter((f) => f.outcome === "completed").length;
   const abandoned = fragments.filter((f) => f.outcome === "abandoned").length;
@@ -57,18 +41,16 @@ function buildAggregate(fragments: Fragment[], eventCounts: Record<string, numbe
   );
 
   const completionRate = total > 0 ? completed / total : 0;
-  const userReadyScore = Math.round(completionRate * 100);
-
   return {
     total_personas: total,
     completed,
     abandoned,
     capped,
     completion_rate: completionRate,
-    user_ready_score: userReadyScore,
+    user_ready_score: Math.round(completionRate * 100),
     total_tx_count: totalTxs,
-    policy_block_count: eventCounts.policy_block || 0,
-    budget_exceeded_count: eventCounts.budget_exceeded || 0,
+    policy_block_count: 0, // policy_block events are no longer counted here
+    budget_exceeded_count: 0,
     abandon_reason_histogram: abandonReasonHistogram,
     top_observations: topObservations,
   };
@@ -80,7 +62,18 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
     url.searchParams.get("token") ||
     req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ||
     null;
-  const access = verifyRunAccess(params.id, token);
+
+  // Owner-or-token gate. Owner is determined by Auth.js session.
+  const session = await auth();
+  let userId: string | null = null;
+  if (session?.user?.email) {
+    const u = await prisma.user.findUnique({
+      where: { email: session.user.email },
+      select: { id: true },
+    });
+    userId = u?.id ?? null;
+  }
+  const access = await verifyRunAccess(params.id, token, userId);
   if (access === "not-found") {
     return NextResponse.json({ error: "run not found" }, { status: 404 });
   }
@@ -88,22 +81,10 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const runDir = join(ROOT, "runs", params.id);
-  const state = JSON.parse(readFileSync(join(runDir, "run.json"), "utf8"));
-  // Don't echo the access token back in the body — it's already in the
-  // caller's URL; no need to multiply the surface it sits on.
-  const { access_token: _stripped, ...safeState } = state;
+  const state = await getRunStateForApi(params.id);
+  if (!state) return NextResponse.json({ error: "run not found" }, { status: 404 });
+  const fragments = state.report_fragments as Fragment[];
+  const aggregate = buildAggregate(fragments);
 
-  const fragments: Fragment[] = [];
-  for (const pid of state.personas as string[]) {
-    const fp = join(runDir, `report-${pid}.json`);
-    if (existsSync(fp)) {
-      try { fragments.push(JSON.parse(readFileSync(fp, "utf8"))); } catch {}
-    }
-  }
-
-  const eventCounts = countEventsByType(runDir);
-  const aggregate = buildAggregate(fragments, eventCounts);
-
-  return NextResponse.json({ ...safeState, report_fragments: fragments, aggregate });
+  return NextResponse.json({ ...state, aggregate });
 }

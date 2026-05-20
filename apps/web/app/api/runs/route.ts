@@ -1,13 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createRun } from "@mimix/orchestrator";
 import { loadPersona } from "@mimix/personas";
+import { auth } from "../../../auth";
+import { prisma } from "../../../lib/prisma";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
+  const session = await auth();
+  if (!session?.user?.email) {
+    return NextResponse.json({ error: "not_authenticated" }, { status: 401 });
+  }
+  const owner = await prisma.user.findUnique({ where: { email: session.user.email } });
+  if (!owner) {
+    return NextResponse.json({ error: "user_not_found" }, { status: 401 });
+  }
+  if (owner.status !== "APPROVED") {
+    return NextResponse.json({ error: "account_pending_approval" }, { status: 403 });
+  }
+
   const body = await req.json();
-  const { target_dapp_url, target_name, target_description, target_kind, personas, payment_signature, payment_verified, requester_email, goal } = body;
+  const { target_dapp_url, target_name, target_description, target_kind, personas, payment_signature, payment_verified, goal } = body;
 
   if (!Array.isArray(personas) || personas.length === 0) {
     return NextResponse.json({ error: "personas required" }, { status: 400 });
@@ -37,7 +51,8 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const result = createRun({
+  const result = await createRun({
+    ownerId: owner.id,
     targetUrl: target_dapp_url,
     targetName: target_name || "Untitled",
     targetDescription: target_description || "",
@@ -45,7 +60,6 @@ export async function POST(req: NextRequest) {
     personas,
     paymentSignature: payment_signature || "debug-skip",
     paymentVerified: !!payment_verified,
-    requesterEmail: typeof requester_email === "string" ? requester_email : undefined,
     goal: typeof goal === "string" ? goal : undefined,
   });
 

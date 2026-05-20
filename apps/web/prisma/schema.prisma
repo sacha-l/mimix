@@ -1,0 +1,129 @@
+// Prisma schema for Mimix. Auth.js v5 tables (User/Account/Session/
+// VerificationToken) + Mimix-specific extensions (status, goal, runs,
+// invoices, consumed payment signatures).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Auth.js v5 + Prisma adapter — required shapes
+// ─────────────────────────────────────────────────────────────────────
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Mimix domain
+// ─────────────────────────────────────────────────────────────────────
+
+enum UserStatus {
+  PENDING
+  APPROVED
+  BANNED
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  createdAt     DateTime  @default(now())
+
+  // Mimix-specific
+  status        UserStatus @default(PENDING)
+  goal          String?
+  questionnaire Json?
+
+  accounts Account[]
+  sessions Session[]
+  runs     Run[]
+  invoices Invoice[]
+}
+
+model Run {
+  id                String   @id // run-{timestamp}-{rand}
+  ownerId           String
+  owner             User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  targetUrl         String
+  targetName        String
+  targetDescription String
+  targetKind        String   // "web" | "solana"
+  personas          String[]
+  goal              String?
+
+  status            String   // running | complete | failed | pending
+  agents            Json     // { personaId: { status, events_count } }
+
+  accessToken       String   // share link (Notion-style)
+  paymentSignature  String?
+  paymentVerified   Boolean  @default(false)
+
+  createdAt         DateTime @default(now())
+  completedAt       DateTime?
+
+  @@index([ownerId, createdAt])
+}
+
+model Invoice {
+  id          String   @id // mimix-{hex}
+  ownerId     String
+  owner       User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  amountUsd   Decimal  @db.Decimal(10, 2)
+  status      String   // pending | paid | failed
+
+  runId       String?
+  accessToken String?
+  payload     Json     // pending run_input (target, personas, goal, etc.)
+
+  createdAt   DateTime @default(now())
+  paidAt      DateTime?
+
+  @@index([ownerId, createdAt])
+}
+
+model ConsumedSignature {
+  signature  String   @id
+  runId      String
+  consumedAt DateTime @default(now())
+}

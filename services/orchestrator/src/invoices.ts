@@ -1,20 +1,14 @@
-import { mkdirSync, readFileSync, existsSync } from "node:fs";
-import { dirname, resolve, join } from "node:path";
-import { fileURLToPath } from "node:url";
-import { writeFileAtomic } from "./fs-atomic";
+import { prisma } from "./prisma";
 import type { TargetKind } from "@mimix/persona-types";
 
 /**
- * Pending-invoice store. NowPayments creates a hosted checkout BEFORE the
- * run exists; on a successful IPN webhook we look up the invoice and call
- * createRun(). Records live in `payments/invoices/{invoice_id}.json`.
+ * NowPayments invoice store, backed by Postgres. NowPayments creates a
+ * hosted checkout BEFORE the run exists; on a successful IPN webhook we
+ * look up the invoice by id and call createRun().
  */
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const ROOT = process.env.MIMIX_ROOT || resolve(__dirname, "../../..");
-const DIR = join(ROOT, "payments", "invoices");
-
 export type InvoiceRunInput = {
+  ownerId: string;
   targetUrl: string;
   targetName: string;
   targetDescription: string;
@@ -26,41 +20,69 @@ export type InvoiceRunInput = {
 
 export type InvoiceRecord = {
   invoice_id: string;
-  created_at: string;
+  created_at: Date;
   amount_usd: number;
   run_input: InvoiceRunInput;
   status: "pending" | "paid" | "failed";
-  /** Set after createRun fires on a successful webhook. */
   run_id?: string;
   access_token?: string;
 };
 
-function invoicePath(invoiceId: string): string {
-  return join(DIR, `${invoiceId}.json`);
+function toRecord(row: any): InvoiceRecord {
+  return {
+    invoice_id: row.id,
+    created_at: row.createdAt,
+    amount_usd: Number(row.amountUsd),
+    run_input: row.payload as InvoiceRunInput,
+    status: row.status as InvoiceRecord["status"],
+    run_id: row.runId ?? undefined,
+    access_token: row.accessToken ?? undefined,
+  };
 }
 
-export function saveInvoice(rec: InvoiceRecord): void {
-  mkdirSync(DIR, { recursive: true });
-  writeFileAtomic(invoicePath(rec.invoice_id), JSON.stringify(rec, null, 2));
+export async function saveInvoice(input: {
+  invoice_id: string;
+  amount_usd: number;
+  run_input: InvoiceRunInput;
+}): Promise<InvoiceRecord> {
+  const row = await prisma.invoice.upsert({
+    where: { id: input.invoice_id },
+    create: {
+      id: input.invoice_id,
+      ownerId: input.run_input.ownerId,
+      amountUsd: input.amount_usd,
+      status: "pending",
+      payload: input.run_input as any,
+    },
+    update: {
+      amountUsd: input.amount_usd,
+      payload: input.run_input as any,
+    },
+  });
+  return toRecord(row);
 }
 
-export function getInvoice(invoiceId: string): InvoiceRecord | null {
-  const p = invoicePath(invoiceId);
-  if (!existsSync(p)) return null;
-  try {
-    return JSON.parse(readFileSync(p, "utf8")) as InvoiceRecord;
-  } catch {
-    return null;
-  }
+export async function getInvoice(invoiceId: string): Promise<InvoiceRecord | null> {
+  const row = await prisma.invoice.findUnique({ where: { id: invoiceId } });
+  return row ? toRecord(row) : null;
 }
 
-export function updateInvoice(
+export async function updateInvoice(
   invoiceId: string,
-  patch: Partial<InvoiceRecord>,
-): InvoiceRecord | null {
-  const rec = getInvoice(invoiceId);
-  if (!rec) return null;
-  const updated = { ...rec, ...patch };
-  saveInvoice(updated);
-  return updated;
+  patch: {
+    status?: "pending" | "paid" | "failed";
+    run_id?: string;
+    access_token?: string;
+  },
+): Promise<InvoiceRecord | null> {
+  const row = await prisma.invoice.update({
+    where: { id: invoiceId },
+    data: {
+      ...(patch.status ? { status: patch.status } : {}),
+      ...(patch.status === "paid" ? { paidAt: new Date() } : {}),
+      ...(patch.run_id !== undefined ? { runId: patch.run_id } : {}),
+      ...(patch.access_token !== undefined ? { accessToken: patch.access_token } : {}),
+    },
+  });
+  return toRecord(row);
 }
