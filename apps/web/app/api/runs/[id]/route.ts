@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { readFileSync, existsSync } from "node:fs";
 import { resolve, join } from "node:path";
+import { verifyRunAccess } from "@mimix/orchestrator";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -73,13 +74,25 @@ function buildAggregate(fragments: Fragment[], eventCounts: Record<string, numbe
   };
 }
 
-export async function GET(_req: Request, { params }: { params: { id: string } }) {
-  const runDir = join(ROOT, "runs", params.id);
-  const runFile = join(runDir, "run.json");
-  if (!existsSync(runFile)) {
+export async function GET(req: Request, { params }: { params: { id: string } }) {
+  const url = new URL(req.url);
+  const token =
+    url.searchParams.get("token") ||
+    req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ||
+    null;
+  const access = verifyRunAccess(params.id, token);
+  if (access === "not-found") {
     return NextResponse.json({ error: "run not found" }, { status: 404 });
   }
-  const state = JSON.parse(readFileSync(runFile, "utf8"));
+  if (access !== "ok") {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+
+  const runDir = join(ROOT, "runs", params.id);
+  const state = JSON.parse(readFileSync(join(runDir, "run.json"), "utf8"));
+  // Don't echo the access token back in the body — it's already in the
+  // caller's URL; no need to multiply the surface it sits on.
+  const { access_token: _stripped, ...safeState } = state;
 
   const fragments: Fragment[] = [];
   for (const pid of state.personas as string[]) {
@@ -92,5 +105,5 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
   const eventCounts = countEventsByType(runDir);
   const aggregate = buildAggregate(fragments, eventCounts);
 
-  return NextResponse.json({ ...state, report_fragments: fragments, aggregate });
+  return NextResponse.json({ ...safeState, report_fragments: fragments, aggregate });
 }

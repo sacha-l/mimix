@@ -20,8 +20,9 @@ add a funded devnet Zerion wallet and a real onchain leg. For web runs the
 journey is the customer's stated goal; for Solana runs it's the persona's
 crypto journey. Runs/users stored as JSON files (`runs/`, `users/`). SMTP email
 notifies operator on run-start and requester on report-ready. An MCP server
-exposes `run_mimix` / `get_run_status` / `get_report`. Payments verify a USDC
-transfer to the operator wallet (replay-guarded); pricing is $9 Standard / $29
+exposes `run_mimix` / `get_run_status` / `get_report`. Run reads (HTTP + SSE)
+are gated by a per-run access token returned once at creation. Payments verify
+a USDC transfer to the operator wallet (replay-guarded); pricing is $9 Standard / $29
 Pro. 3 live personas; 5 beta personas are card-only stubs. Launch work lives on
 the `staging` branch.
 
@@ -31,13 +32,7 @@ the `staging` branch.
 
 ### P1 — hardening & robustness
 
-- **No auth on API routes.** `/api/runs`, `/api/runs/[id]`, `/api/runs/[id]/events`,
-  `/api/pay/verify` are all open — anyone can create runs, watch any run's live
-  SSE stream, or verify arbitrary transactions. Decide on a model (signed
-  requester token, or accept it as a deliberate demo gap).
-- **Wrap-up LLM errors are silent.** If `askObservations` fails, the report
-  fragment gets empty observations with no surfaced reason
-  (`services/agent-runtime/src/main.ts`).
+_Empty — all known correctness/abuse-risk items are shipped. Next gaps land here._
 
 ### P2 — product / roadmap
 
@@ -76,6 +71,15 @@ the `staging` branch.
 
 ## Recently shipped
 
+- **P1 cleared:** per-run **access tokens** gate `/api/runs/[id]` and the SSE
+  stream (capability-style — token in the run URL, returned once by
+  `POST /api/runs`, included by the MCP server); wrap-up LLM errors now surface
+  as `wrap_up_error` on the report fragment instead of silently producing empty
+  observations. Also: Railway deploy live at
+  `https://mimix-production.up.railway.app`, fronted by a `railway.json` +
+  single-service entrypoint; Dockerfile uses `npm install -g pnpm` (the
+  Playwright base image's corepack has stale keys) and matches the installed
+  Playwright `v1.60.0-noble` so chromium actually launches.
 - **Launch v1 (on `staging`):** engine decoupled from Solana — `target_kind`
   `web`/`solana`, so any web app is testable (web runs skip wallet/funding/
   Phantom/onchain-send; journey = customer goal). USDC payment verification +

@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
 import { dirname, resolve, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { randomBytes } from "node:crypto";
 import type { RunState, TargetKind } from "@mimix/persona-types";
 import { recordRunForUser } from "./users";
 import { sendRunStartedEmail, sendReportReadyEmail } from "./email";
@@ -29,7 +30,29 @@ export type CreateRunInput = {
 export type CreateRunResult = {
   runId: string;
   runDir: string;
+  /** Token the client must present to read this run. Returned exactly once. */
+  accessToken: string;
 };
+
+/**
+ * Validate that `providedToken` matches the run's stored access_token.
+ * Legacy runs (created before tokens existed) are accessible without one.
+ */
+export function verifyRunAccess(
+  runId: string,
+  providedToken: string | null,
+): "ok" | "missing" | "invalid" | "not-found" {
+  const runFile = join(ROOT, "runs", runId, "run.json");
+  if (!existsSync(runFile)) return "not-found";
+  try {
+    const state = JSON.parse(readFileSync(runFile, "utf8")) as RunState;
+    if (!state.access_token) return "ok";
+    if (!providedToken) return "missing";
+    return providedToken === state.access_token ? "ok" : "invalid";
+  } catch {
+    return "not-found";
+  }
+}
 
 function readRunState(runDir: string): RunState {
   return JSON.parse(readFileSync(join(runDir, "run.json"), "utf8"));
@@ -67,6 +90,7 @@ export function createRun(input: CreateRunInput): CreateRunResult {
   mkdirSync(runDir, { recursive: true });
 
   const targetKind: TargetKind = input.targetKind || "web";
+  const accessToken = randomBytes(32).toString("hex");
 
   const state: RunState = {
     id: runId,
@@ -77,6 +101,7 @@ export function createRun(input: CreateRunInput): CreateRunResult {
       description: input.targetDescription,
     },
     target_kind: targetKind,
+    access_token: accessToken,
     personas: input.personas,
     payment: {
       amount_usdg: input.personas.length * 5,
@@ -119,7 +144,7 @@ export function createRun(input: CreateRunInput): CreateRunResult {
     } catch {}
   });
 
-  return { runId, runDir };
+  return { runId, runDir, accessToken };
 }
 
 async function runAgentsSequentially(

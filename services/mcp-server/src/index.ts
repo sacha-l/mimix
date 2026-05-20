@@ -119,7 +119,7 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
             ? "web"
             : "solana";
 
-    const { runId } = createRun({
+    const { runId, accessToken } = createRun({
       targetUrl,
       targetName: "MCP run",
       targetDescription: "Started via the Mimix MCP server.",
@@ -137,7 +137,8 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
           text:
             `Started Mimix run ${runId} — ${personas.length} persona(s) ` +
             `(${personas.join(", ")}) against ${targetUrl}. ` +
-            `Poll get_run_status with run_id "${runId}".`,
+            `Poll get_run_status with run_id "${runId}". ` +
+            `Web URL: ${process.env.MIMIX_PUBLIC_URL || "http://localhost:3000"}/run/${runId}?token=${accessToken}`,
         },
       ],
     };

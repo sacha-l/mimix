@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 
 type RunEvent = any;
 type RunState = {
@@ -26,6 +26,9 @@ const COLORS: Record<string, string> = {
 export default function RunPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const token = searchParams.get("token") || "";
+  const auth = token ? `?token=${encodeURIComponent(token)}` : "";
   const [state, setState] = useState<RunState | null>(null);
   const [eventsByPersona, setEventsByPersona] = useState<Record<string, RunEvent[]>>({});
   const [done, setDone] = useState(false);
@@ -33,18 +36,18 @@ export default function RunPage() {
   const [connectionLost, setConnectionLost] = useState(false);
 
   useEffect(() => {
-    fetch(`/api/runs/${id}`)
+    fetch(`/api/runs/${id}${auth}`)
       .then((r) => {
         if (!r.ok) throw new Error(`run not found (${r.status})`);
         return r.json();
       })
       .then(setState)
       .catch((e) => setError(e?.message || "failed to load run"));
-  }, [id]);
+  }, [id, auth]);
 
   useEffect(() => {
     if (!id) return;
-    const evtSource = new EventSource(`/api/runs/${id}/events`);
+    const evtSource = new EventSource(`/api/runs/${id}/events${auth}`);
     evtSource.onmessage = (e) => {
       setConnectionLost(false);
       try {
@@ -58,7 +61,7 @@ export default function RunPage() {
     evtSource.addEventListener("done", () => {
       setDone(true);
       evtSource.close();
-      fetch(`/api/runs/${id}`).then((r) => r.json()).then(setState);
+      fetch(`/api/runs/${id}${auth}`).then((r) => r.json()).then(setState);
     });
     evtSource.onerror = () => {
       // Browser auto-retries the stream; flag it so the user knows the
@@ -151,7 +154,7 @@ export default function RunPage() {
       {done && (
         <div className="mt-8 text-center">
           <button
-            onClick={() => router.push(`/report/${id}`)}
+            onClick={() => router.push(`/report/${id}${auth}`)}
             data-testid="generate-report"
             className="bg-slate-900 hover:bg-slate-800 text-white px-8 py-3 rounded-lg font-semibold"
           >

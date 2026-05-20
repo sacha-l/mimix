@@ -264,6 +264,7 @@ async function run(opts: RunOpts): Promise<number> {
 
   // 4. Wrap up — ask LLM for observations
   let observations: string[] = [];
+  let wrapUpError: string | undefined;
   try {
     const transcript = recentActions.map((a, i) => `${i + 1}. ${a.action}: ${a.reasoning || ""}`).join("\n");
     observations = await llm.askObservations(transcript);
@@ -271,7 +272,8 @@ async function run(opts: RunOpts): Promise<number> {
       eventLog.emit({ type: "observation", text: obs });
     }
   } catch (err) {
-    eventLog.emit({ type: "error", message: `observations_failed: ${(err as Error).message}` });
+    wrapUpError = (err as Error).message;
+    eventLog.emit({ type: "error", message: `observations_failed: ${wrapUpError}` });
   }
 
   await browser.close();
@@ -283,6 +285,7 @@ async function run(opts: RunOpts): Promise<number> {
     completed_steps: completedSteps,
     failed_step: failedStep,
     observations,
+    wrap_up_error: wrapUpError,
     tx_signatures: txSignatures,
     capped,
     turns_used: turnsUsed,

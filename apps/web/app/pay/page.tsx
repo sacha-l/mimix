@@ -100,7 +100,8 @@ export default function PayPage() {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "create_run_failed");
     localStorage.removeItem("mimix.pending_run");
-    router.push(`/run/${data.run_id}`);
+    const token = data.access_token ? `?token=${encodeURIComponent(data.access_token)}` : "";
+    router.push(`/run/${data.run_id}${token}`);
   };
 
   const handleConnect = async (opts: { reset?: boolean } = {}) => {

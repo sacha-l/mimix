@@ -49,5 +49,5 @@ export async function POST(req: NextRequest) {
     goal: typeof goal === "string" ? goal : undefined,
   });
 
-  return NextResponse.json({ run_id: result.runId });
+  return NextResponse.json({ run_id: result.runId, access_token: result.accessToken });
 }

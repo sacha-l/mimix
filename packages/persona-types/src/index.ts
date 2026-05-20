@@ -101,6 +101,12 @@ export type RunState = {
     description: string;
   };
   target_kind?: TargetKind;
+  /**
+   * Random per-run token. Reads of run.json / SSE events require this
+   * token (query `?token=` or `Authorization: Bearer`). Returned to the
+   * client once by POST /api/runs and stored in the run URL.
+   */
+  access_token?: string;
   personas: string[];
   payment: {
     amount_usdg: number;
@@ -122,6 +128,9 @@ export type ReportFragment = {
   completed_steps: string[];
   failed_step?: string;
   observations: string[];
+  /** If askObservations failed, the error message lands here so empty
+   *  observations aren't silently mistaken for "the agent had nothing to say". */
+  wrap_up_error?: string;
   tx_signatures: string[];
   capped?: boolean;
   turns_used?: number;

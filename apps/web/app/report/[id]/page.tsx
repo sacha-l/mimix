@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 
 type Fragment = {
   persona: string;
@@ -41,18 +41,21 @@ type RunData = {
 
 export default function ReportPage() {
   const { id } = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
+  const token = searchParams.get("token") || "";
+  const auth = token ? `?token=${encodeURIComponent(token)}` : "";
   const [run, setRun] = useState<RunData | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch(`/api/runs/${id}`)
+    fetch(`/api/runs/${id}${auth}`)
       .then((r) => {
         if (!r.ok) throw new Error(`report not found (${r.status})`);
         return r.json();
       })
       .then(setRun)
       .catch((e) => setError(e?.message || "failed to load report"));
-  }, [id]);
+  }, [id, auth]);
 
   if (error) {
     return (
