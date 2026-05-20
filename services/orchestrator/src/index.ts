@@ -11,6 +11,8 @@ import { writeFileAtomic } from "./fs-atomic";
 
 export { registerUser, getUser, recordRunForUser } from "./users";
 export type { UserRecord, Questionnaire } from "./users";
+export { saveInvoice, getInvoice, updateInvoice } from "./invoices";
+export type { InvoiceRecord, InvoiceRunInput } from "./invoices";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = process.env.MIMIX_ROOT || resolve(__dirname, "../../..");

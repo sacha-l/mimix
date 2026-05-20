@@ -36,10 +36,6 @@ _Empty — all known correctness/abuse-risk items are shipped. Next gaps land he
 
 ### P2 — product / roadmap
 
-- **Real-USDC payment UI.** The `/api/pay/verify` backend now checks a USDC
-  transfer to `MIMIX_PAYOUT_ADDRESS`, but the `/pay` page UI still drives the
-  old devnet USDG + Phantom flow. The first cohort is comped (debug skip); a
-  real USDC checkout UI (or a hosted checkout) still needs building.
 - **Tier → model wiring.** `MIMIX_MODEL` is global; the Pro tier should
   per-run select Opus 4.7 while Standard uses Sonnet 4.6. Needs a `tier` field
   on the run, threaded register → pay → `createRun` → agent env.
@@ -71,6 +67,19 @@ _Empty — all known correctness/abuse-risk items are shipped. Next gaps land he
 
 ## Recently shipped
 
+- **NowPayments USDC checkout (v1 payments rail).** Hosted single-checkout
+  accepting **USDC on Solana, Ethereum, Base, Arbitrum, Optimism, and Polygon**
+  via the payer's wallet of choice (Phantom, MetaMask, Coinbase Wallet,
+  hardware, exchange withdrawal). Non-custodial — USDC lands directly in the
+  operator's Solana / EVM wallets configured in the NowPayments dashboard.
+  Server flow: `POST /api/pay/nowpayments/create` builds a NowPayments invoice
+  per pending run; the hosted checkout opens; the IPN webhook (HMAC-SHA512
+  verified) fires on `finished` and only then does `createRun()` execute, so
+  no run starts unpaid; `/pay/success` polls the status endpoint and forwards
+  the payer to `/run/{id}?token=…` when the run materialises. The old devnet
+  USDG + Phantom flow is gone from `/pay`; the Solana-Pay-direct
+  `/api/pay/verify` stays as a permanent portable fallback. BTC is deferred
+  per "USDC only for v1."
 - **P1 cleared:** per-run **access tokens** gate `/api/runs/[id]` and the SSE
   stream (capability-style — token in the run URL, returned once by
   `POST /api/runs`, included by the MCP server); wrap-up LLM errors now surface
