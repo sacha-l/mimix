@@ -187,6 +187,7 @@ async function runAgentsSequentially(
       requesterEmail: finalState.requester.email,
       runId,
       target: { url: finalState.target_dapp.url, name: finalState.target_dapp.name },
+      accessToken: finalState.access_token,
     }).catch((err) => console.error(`[orchestrator] report-ready email failed:`, err));
   }
 }
